@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NoMAD DRUgS — échéancier de prise en voyage</title>
+<style>
+  :root{
+    --paper:#F1FAF7;
+    --ink:#12302C;
+    --ink-soft:#4F6F69;
+    --rule:#BCE1D9;
+    --rule-soft:#DCF1EB;
+    --field:#FFFFFF;
+    --brand:#00A79B;
+    --brand-deep:#00786F;
+    --brand-darker:#005E57;
+    --lime:#B4E017;
+    --orange:#F5820B;
+    --rasp:#E62E6B;
+    --shift:#A94D00;
+    --shift-bar:#F5820B;
+    --shift-bg:#FFF3E0;
+    --stable:#00786F;
+    --stable-bar:#00A79B;
+    --stable-bg:#DDF5F1;
+    --alert:#C21550;
+    --alert-bg:#FFE8F0;
+    --focus:#00786F;
+    --r:9px;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-size:16px;
+    line-height:1.5;
+  }
+  body::before{
+    content:"";display:block;height:7px;
+    background:linear-gradient(90deg,
+      var(--brand) 0 25%, var(--lime) 25% 50%,
+      var(--orange) 50% 75%, var(--rasp) 75% 100%);
+  }
+  .wrap{max-width:60rem;margin:0 auto;padding:2.5rem 1.25rem 5rem}
+  h1{
+    font-size:2.6rem;line-height:1.1;margin:0 0 .5rem;
+    font-weight:700;letter-spacing:-.02em;color:var(--brand-deep);
+    text-align:center;
+  }
+  h1 .o{font-style:italic}
+  .tagline{
+    margin:0 auto 2rem;color:var(--ink-soft);max-width:32em;
+    font-size:.88rem;line-height:1.55;text-align:center;
+  }
+  h2{
+    font-size:.95rem;font-weight:600;margin:0 0 1.15rem;letter-spacing:.01em;
+    padding-bottom:.45rem;border-bottom:1px solid var(--rule);
+    text-align:center;color:var(--brand-deep);
+  }
+  .care{
+    border:1px solid var(--rasp);
+    background:var(--alert-bg);border-radius:var(--r);
+    padding:.9rem 1.15rem;margin:0 auto 2.25rem;
+    font-size:.86rem;line-height:1.5;max-width:44em;text-align:center;
+  }
+  section{margin:0 0 2.25rem}
+  .grid{display:grid;gap:1.1rem 1.5rem;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr))}
+  .field{display:flex;flex-direction:column;gap:.3rem;min-width:0}
+  .field.wide{grid-column:1/-1}
+  label{font-size:.82rem;color:var(--ink-soft);font-family:system-ui,sans-serif}
+  .hint{font-size:.78rem;color:var(--ink-soft);font-family:system-ui,sans-serif;line-height:1.4}
+  input,textarea,button,select{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:.95rem}
+  .timepick{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
+  .timepick select{
+    background:var(--field);border:1px solid var(--rule);border-radius:var(--r);
+    padding:.5rem .4rem;color:var(--ink);font-variant-numeric:tabular-nums;cursor:pointer;
+  }
+  .timepick select:hover{border-color:var(--brand)}
+  .colon{font-weight:700;color:var(--ink-soft)}
+  .btn.small{padding:.5rem 1rem;font-size:.88rem}
+  .chips{list-style:none;display:flex;flex-wrap:wrap;gap:.4rem;margin:.6rem 0 0;padding:0}
+  .chips li{
+    display:inline-flex;align-items:center;gap:.2rem;
+    background:var(--stable-bg);border:1px solid var(--rule);border-radius:99px;
+    padding:.15rem .2rem .15rem .75rem;font-size:.95rem;font-variant-numeric:tabular-nums;
+  }
+  .chips li.empty{
+    background:none;border:1px dashed var(--rule);color:var(--ink-soft);
+    padding:.3rem .8rem;font-size:.82rem;
+  }
+  .chips button{
+    border:0;background:none;cursor:pointer;color:var(--ink-soft);
+    font-size:1.05rem;line-height:1;width:1.5rem;height:1.5rem;border-radius:50%;padding:0;
+  }
+  .chips button:hover{background:var(--rasp);color:#fff}
+  input,textarea{
+    background:var(--field);border:1px solid var(--rule);border-radius:var(--r);
+    padding:.5rem .65rem;color:var(--ink);width:100%;
+  }
+  input:hover,textarea:hover{border-color:var(--brand)}
+  input[type=number]{font-variant-numeric:tabular-nums;width:5.5rem;text-align:right}
+  input:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{
+    outline:2px solid var(--focus);outline-offset:1px;
+  }
+  textarea{resize:vertical;min-height:3.4rem}
+  .route{
+    display:grid;grid-template-columns:1fr auto 1fr;
+    grid-template-areas:
+      "lo .    ld"
+      "io swap id"
+      "no .    nd";
+    column-gap:.75rem;row-gap:.3rem;
+  }
+  .route .lo{grid-area:lo}
+  .route .io{grid-area:io}
+  .route .no{grid-area:no}
+  .route .ld{grid-area:ld}
+  .route .id{grid-area:id}
+  .route .nd{grid-area:nd}
+  .route .swap{grid-area:swap;align-self:stretch}
+  .route label{align-self:end}
+  .swap{
+    border:1px solid var(--rule);background:var(--field);border-radius:var(--r);
+    padding:.5rem .7rem;cursor:pointer;line-height:1;color:var(--brand-deep);
+  }
+  .swap:hover{background:var(--rule-soft)}
+  .tzinfo{font-size:.75rem;color:var(--ink-soft);font-family:system-ui,sans-serif;min-height:1.1em}
+  .inline{display:flex;gap:.5rem;align-items:baseline;flex-wrap:wrap}
+  .linkish{
+    background:none;border:0;padding:0;color:var(--focus);cursor:pointer;
+    font-size:.78rem;text-decoration:underline;font-family:system-ui,sans-serif;
+  }
+  .actions{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin-top:.5rem}
+  .actions{justify-content:center}
+  .actions#runbar{margin:0 0 1.5rem}
+  #run{font-size:1.05rem;padding:.75rem 2rem}
+  .btn{
+    border:1px solid var(--brand);background:var(--brand);color:#fff;
+    padding:.65rem 1.35rem;border-radius:var(--r);cursor:pointer;font-weight:600;
+  }
+  .btn:hover{background:var(--brand-deep);border-color:var(--brand-deep)}
+  .btn[disabled]{opacity:.4;cursor:not-allowed}
+  .btn.secondary{background:var(--field);color:var(--ink);border-color:var(--rule)}
+  .btn.secondary:hover{background:var(--rule-soft)}
+  .said{font-size:.82rem;color:var(--stable);font-family:system-ui,sans-serif}
+
+  .readout{border-top:3px solid var(--brand);padding-top:1rem}
+  .readout.stale{opacity:.45}
+  .stalebar{border-left:4px solid var(--brand);background:var(--stable-bg);border-radius:var(--r);padding:.75rem .95rem;margin:0 0 1rem;font-size:.9rem}
+  .invite{color:var(--ink-soft);font-size:.95rem;max-width:38em;margin:0 auto;text-align:center}
+  .facts{
+    display:grid;gap:1.1rem 2rem;
+    grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));
+    margin:0 0 1.5rem;text-align:center;
+  }
+  .fact dt{font-size:.78rem;color:var(--ink-soft);font-family:system-ui,sans-serif;margin:0 0 .1rem}
+  .fact dd{margin:0;font-size:1.2rem;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.25}
+  .fact dd small{font-size:.85rem;color:var(--ink-soft)}
+  .note{
+    border-left:4px solid var(--shift-bar);background:var(--shift-bg);border-radius:var(--r);
+    padding:.75rem .95rem;margin:0 auto 1.25rem;font-size:.9rem;max-width:46em;
+  }
+  .note.bad{border-color:var(--rasp);background:var(--alert-bg)}
+  .note.ok{border-color:var(--stable-bar);background:var(--stable-bg)}
+
+  table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+  caption{text-align:center;font-size:.82rem;color:var(--ink-soft);padding-bottom:.7rem;max-width:44em;margin:0 auto}
+  th{
+    text-align:left;font-size:.78rem;font-weight:600;color:var(--ink-soft);
+    font-family:system-ui,sans-serif;padding:.35rem .5rem;border-bottom:1px solid var(--rule);
+  }
+  td{padding:.3rem .5rem;border-bottom:1px solid var(--rule-soft);font-size:.9rem;white-space:nowrap}
+  tr.gliding td.hour{color:var(--shift);font-weight:600}
+  tr.arrived td.hour{color:var(--stable);font-weight:600}
+  .daymark{font-size:.78rem;color:var(--ink-soft)}
+  .more{font-size:.82rem;color:var(--ink-soft);padding-top:.7rem;text-align:center}
+  footer{margin:3rem auto 0;padding-top:1.25rem;border-top:1px solid var(--rule);font-size:.78rem;color:var(--ink-soft);text-align:center;max-width:44em}
+  .owner{margin:1rem 0 0;font-size:.66rem;letter-spacing:.02em;color:var(--ink-soft);text-align:center}
+  @media (max-width:600px){
+    .route{
+      grid-template-columns:1fr;
+      grid-template-areas:"lo" "io" "no" "swap" "ld" "id" "nd";
+    }
+    .route .swap{justify-self:center;align-self:center;margin:.5rem 0}
+    .wrap{padding:1.75rem 1rem 4rem}
+    h1{font-size:1.55rem}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>N<span class="o">o</span>MAD DRU<span class="o">g</span>S</h1>
+<p class="tagline">Décaler jour après jour, de quelques minutes seulement, l'heure de prise d'un traitement à horaire strict — jusqu'à retrouver son rythme de vie habituel dans un autre fuseau horaire.</p>
+
+<p class="care">Cet outil ne fait que du calcul horaire. Il ne connaît ni le traitement ni la pathologie concernés. Faites valider l'échéancier par un professionnel de santé avant de le suivre, en particulier le décalage quotidien retenu.</p>
+
+<section>
+  <h2>Le traitement</h2>
+  <div class="grid">
+    <div class="field wide">
+      <label for="patternH">Heures de prise habituelles, au départ</label>
+      <div class="timepick">
+        <select id="patternH" aria-label="Heure de prise"></select>
+        <span class="colon">:</span>
+        <select id="patternM" aria-label="Minutes de prise"></select>
+        <button type="button" class="btn small" id="patternAdd">Ajouter</button>
+      </div>
+      <ul class="chips" id="patternList"></ul>
+      <input type="hidden" id="pattern" value="08:00;20:00">
+      <span class="hint">Ce sont les heures prescrites : l'écart entre ces prises ne sera jamais modifié.</span>
+    </div>
+    <div class="field">
+      <label for="subject">Titre dans le calendrier</label>
+      <input id="subject" type="text" value="Prise du traitement" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="description">Note dans le calendrier</label>
+      <textarea id="description">Échéancier NoMAD DRUgS</textarea>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Le voyage</h2>
+  <div class="grid">
+    <div class="field wide">
+      <div class="route">
+        <label for="tzOrigin" class="lo">Fuseau de départ</label>
+        <input id="tzOrigin" class="io" type="text" list="tzlist" autocomplete="off" spellcheck="false">
+        <span class="tzinfo no" id="tzOriginInfo"></span>
+        <button type="button" class="swap" id="swap" title="Inverser départ et destination" aria-label="Inverser départ et destination">⇄</button>
+        <label for="tzDest" class="ld">Fuseau de destination</label>
+        <input id="tzDest" class="id" type="text" list="tzlist" autocomplete="off" spellcheck="false">
+        <span class="tzinfo nd" id="tzDestInfo"></span>
+      </div>
+      <datalist id="tzlist"></datalist>
+    </div>
+    <div class="field">
+      <label for="dateStart">Premier jour sur place</label>
+      <input id="dateStart" type="date">
+    </div>
+    <div class="field">
+      <div class="inline">
+        <label for="dateEnd" style="flex:1 1 auto">Dernier jour de l'échéancier</label>
+        <button type="button" class="linkish" id="resetEnd">Vider</button>
+      </div>
+      <input id="dateEnd" type="date">
+      <span class="hint" id="endHint">Laissez vide pour aller jusqu'au jour où l'horaire visé est atteint, et pas plus loin.</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>L'adaptation</h2>
+  <div class="grid">
+    <div class="field wide">
+      <div class="inline">
+        <label for="targetsH" style="flex:1 1 auto">Heures visées sur place, en heure locale</label>
+        <button type="button" class="linkish" id="resetTargets">Reprendre mes heures habituelles</button>
+      </div>
+      <div class="timepick">
+        <select id="targetsH" aria-label="Heure visée"></select>
+        <span class="colon">:</span>
+        <select id="targetsM" aria-label="Minutes visées"></select>
+        <button type="button" class="btn small" id="targetsAdd">Ajouter</button>
+      </div>
+      <ul class="chips" id="targetsList"></ul>
+      <input type="hidden" id="targets" value="08:00;20:00">
+      <span class="hint" id="targetsHint">Recopiées sur les heures habituelles. Modifiez-les si le rythme de vie change sur place — toutes les prises doivent alors être décalées du même montant.</span>
+    </div>
+    <div class="field">
+      <label for="lag">Décalage quotidien, en minutes</label>
+      <input id="lag" type="number" min="1" max="240" step="1" value="15">
+      <span class="hint">Ce que le traitement tolère de variation d'un jour à l'autre.</span>
+    </div>
+    <div class="field">
+      <label for="prealarm">Rappel anticipé, en minutes</label>
+      <input id="prealarm" type="number" min="0" max="120" step="1" value="10">
+      <span class="hint">0 pour n'avoir que l'alerte à l'heure exacte.</span>
+    </div>
+  </div>
+</section>
+
+<div class="actions" id="runbar">
+  <button type="button" class="btn" id="run">Calculer l'échéancier</button>
+  <span class="said" id="said"></span>
+</div>
+
+<div class="note stalebar" id="staleBar" hidden>Les paramètres ont changé. Relancez le calcul pour mettre à jour l'échéancier.</div>
+
+<section class="readout" id="readout" aria-live="polite"></section>
+
+<div class="actions" id="outputs" style="display:none">
+  <button type="button" class="btn" id="download">Télécharger l'échéancier (.ics)</button>
+  <button type="button" class="btn secondary" id="copy">Copier le lien de cette configuration</button>
+  <span class="said" id="saidOut"></span>
+</div>
+
+<footer>
+  Tous les calculs se font dans votre navigateur, à partir de la base de fuseaux horaires qu'il embarque. Aucune donnée n'est envoyée nulle part. Les heures des rendez-vous sont enregistrées en temps universel, elles resteront donc justes quel que soit le fuseau réglé sur l'appareil.
+  <p class="owner">NoMAD DRUgS est une application Data Intellisenses.</p>
+</footer>
+
+</div>
+
+<script>
+"use strict";
+
+/* ---------- fuseaux horaires ---------- */
+
+const FALLBACK_ZONES = ["Europe/Paris","Europe/London","Europe/Lisbon","Europe/Madrid","Europe/Berlin","Europe/Rome","Europe/Athens","Europe/Moscow","Africa/Casablanca","Africa/Abidjan","Africa/Lagos","Africa/Cairo","Africa/Nairobi","Africa/Johannesburg","America/New_York","America/Chicago","America/Denver","America/Los_Angeles","America/Anchorage","America/Toronto","America/Mexico_City","America/Bogota","America/Lima","America/Santiago","America/Sao_Paulo","America/Buenos_Aires","Asia/Jerusalem","Asia/Dubai","Asia/Karachi","Asia/Kolkata","Asia/Kathmandu","Asia/Dhaka","Asia/Bangkok","Asia/Jakarta","Asia/Shanghai","Asia/Hong_Kong","Asia/Singapore","Asia/Seoul","Asia/Tokyo","Australia/Perth","Australia/Sydney","Pacific/Auckland","Pacific/Honolulu"];
+
+let ZONES;
+try { ZONES = Intl.supportedValuesOf("timeZone"); }
+catch (e) { ZONES = FALLBACK_ZONES; }
+if (!ZONES || !ZONES.length) ZONES = FALLBACK_ZONES;
+const ZONESET = new Set(ZONES);
+
+(function fillZones(){
+  const dl = document.getElementById("tzlist");
+  const frag = document.createDocumentFragment();
+  for (const z of ZONES) {
+    const o = document.createElement("option");
+    o.value = z;
+    o.label = z.split("/").pop().replace(/_/g," ");
+    frag.appendChild(o);
+  }
+  dl.appendChild(frag);
+})();
+
+/* Décalage du fuseau `tz` par rapport à UTC, en millisecondes, à l'instant `ts`. */
+function tzOffset(tz, ts) {
+  /* Le formatage ne descend pas sous la seconde : on compare à un instant
+     tronqué à la seconde, sinon le décalage traîne les millisecondes de ts. */
+  const base = Math.floor(ts / 1000) * 1000;
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit"
+  });
+  const p = {};
+  for (const part of dtf.formatToParts(new Date(base))) p[part.type] = part.value;
+  let h = parseInt(p.hour, 10);
+  if (h === 24) h = 0;
+  const asUTC = Date.UTC(+p.year, p.month - 1, +p.day, h, +p.minute, +p.second);
+  return asUTC - base;
+}
+
+/* Instant UTC correspondant à une date/heure murale dans le fuseau `tz`. */
+function utcFromLocal(tz, y, m, d, hh, mm) {
+  const guess = Date.UTC(y, m - 1, d, hh, mm, 0);
+  let ts = guess - tzOffset(tz, guess);
+  ts = guess - tzOffset(tz, ts);
+  return ts;
+}
+
+function offsetLabel(tz, ts) {
+  if (!ZONESET.has(tz)) return "";
+  const mins = Math.round(tzOffset(tz, ts) / 60000);
+  const sign = mins < 0 ? "−" : "+";
+  const a = Math.abs(mins);
+  const hh = Math.floor(a / 60), mm = a % 60;
+  const off = "UTC" + sign + String(hh).padStart(2, "0") +
+              (mm ? ":" + String(mm).padStart(2, "0") : "");
+  const name = new Intl.DateTimeFormat("fr-FR", { timeZone: tz, timeZoneName: "long" })
+    .formatToParts(new Date(ts)).find(p => p.type === "timeZoneName");
+  return name ? off + " · " + name.value : off;
+}
+
+/* ---------- utilitaires ---------- */
+
+function parseTimes(str) {
+  const out = [];
+  for (const raw of String(str).split(";")) {
+    const s = raw.trim();
+    if (!s) continue;
+    const m = /^(\d{1,2})\s*[:hH]\s*(\d{1,2})$/.exec(s);
+    if (!m) return null;
+    const hh = +m[1], mm = +m[2];
+    if (hh > 23 || mm > 59) return null;
+    out.push(hh * 60 + mm);
+  }
+  if (!out.length) return null;
+  return out;
+}
+
+function hhmm(mins) {
+  const m = ((mins % 1440) + 1440) % 1440;
+  return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+}
+
+function durationLabel(mins) {
+  const a = Math.abs(Math.round(mins));
+  const h = Math.floor(a / 60), m = a % 60;
+  if (h && m) return h + " h " + String(m).padStart(2, "0");
+  if (h) return h + " h";
+  return m + " min";
+}
+
+/* Ramène un décalage dans [−12 h, +12 h[ : on prend toujours le chemin le plus court,
+   et à égalité (12 h pile) on recule les prises. */
+function normalizeShift(mins) {
+  let m = ((mins % 1440) + 1440) % 1440;
+  if (m >= 720) m -= 1440;
+  return m;
+}
+
+function ymd(dateStr) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr || "");
+  return m ? { y: +m[1], m: +m[2], d: +m[3] } : null;
+}
+function dayIndex(dateStr) {
+  const p = ymd(dateStr);
+  return p ? Date.UTC(p.y, p.m - 1, p.d) / 86400000 : null;
+}
+function fromDayIndex(i) {
+  const dt = new Date(i * 86400000);
+  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+}
+
+const MAX_EVENTS = 3000;
+
+/* ---------- le calcul ---------- */
+
+function compute() {
+  const v = readForm();
+  const errors = [];
+
+  const pattern = parseTimes(v.pattern);
+  const targets = parseTimes(v.targets);
+  if (!pattern) errors.push("Ajoutez au moins une heure de prise habituelle.");
+  if (!targets) errors.push("Ajoutez au moins une heure visée sur place.");
+  if (!ZONESET.has(v.tzOrigin)) errors.push("Choisissez un fuseau de départ dans la liste proposée.");
+  if (!ZONESET.has(v.tzDest)) errors.push("Choisissez un fuseau de destination dans la liste proposée.");
+
+  const iStart = dayIndex(v.dateStart), iEnd = dayIndex(v.dateEnd);
+  if (iStart === null) errors.push("Indiquez le premier jour sur place.");
+  if (iEnd === null) errors.push("Indiquez le dernier jour de l'échéancier, ou videz le champ pour aller jusqu'au jour où l'horaire visé est atteint.");
+  if (iStart !== null && iEnd !== null && iEnd < iStart) errors.push("Le dernier jour de l'échéancier tombe avant le premier jour sur place.");
+
+  if (pattern && targets && pattern.length !== targets.length)
+    errors.push("Il faut autant d'heures visées que d'heures de prise : " + pattern.length + " ici.");
+
+  let shift = null, uniform = true;
+  if (pattern && targets && pattern.length === targets.length) {
+    const deltas = pattern.map((p, i) => normalizeShift(targets[i] - p));
+    uniform = deltas.every(d => d === deltas[0]);
+    if (!uniform) {
+      errors.push("Les heures visées ne décalent pas toutes les prises du même montant. L'écart entre deux prises doit rester celui de la prescription.");
+    }
+  }
+
+  if (!v.lag || v.lag < 1) errors.push("Le décalage quotidien doit valoir au moins 1 minute.");
+
+  if (errors.length) return { ok: false, errors };
+
+  const ref = fromDayIndex(iStart);
+  const refTs = utcFromLocal(v.tzDest, ref.y, ref.m, ref.d, 12, 0);
+  const delta = (tzOffset(v.tzDest, refTs) - tzOffset(v.tzOrigin, refTs)) / 60000;
+  shift = normalizeShift((targets[0] - pattern[0]) - delta);
+
+  const dir = shift === 0 ? 0 : (shift > 0 ? 1 : -1);
+  const daysNeeded = shift === 0 ? 0 : Math.ceil(Math.abs(shift) / v.lag);
+  const daysAvailable = iEnd - iStart;
+
+  const rows = [];
+  let truncated = false;
+  for (let d = 0; d <= daysAvailable; d++) {
+    const disp = dir * Math.min(Math.abs(shift), d * v.lag);
+    const arrived = Math.abs(disp) >= Math.abs(shift);
+    const date = fromDayIndex(iStart + d);
+    for (let k = 0; k < targets.length; k++) {
+      if (rows.length >= MAX_EVENTS) { truncated = true; break; }
+      const conv = utcFromLocal(v.tzDest, date.y, date.m, date.d, Math.floor(targets[k] / 60), targets[k] % 60);
+      const ts = conv + (disp - shift) * 60000;
+      rows.push({ ts, day: d, k, arrived });
+    }
+    if (truncated) break;
+  }
+
+  return {
+    ok: true, v, pattern, targets, delta, shift, dir, iStart,
+    daysNeeded, daysAvailable, rows, truncated,
+    converges: daysNeeded <= daysAvailable
+  };
+}
+
+/* Jour de convergence, indépendant de la date de fin : il ne dépend que du
+   décalage à rattraper et du décalage quotidien. Renvoie null si non calculable. */
+function convergenceDay() {
+  const v = readForm();
+  const pattern = parseTimes(v.pattern), targets = parseTimes(v.targets);
+  const iStart = dayIndex(v.dateStart);
+  if (!pattern || !targets || pattern.length !== targets.length) return null;
+  if (!ZONESET.has(v.tzOrigin) || !ZONESET.has(v.tzDest)) return null;
+  if (iStart === null || !(v.lag >= 1)) return null;
+  const ref = fromDayIndex(iStart);
+  const refTs = utcFromLocal(v.tzDest, ref.y, ref.m, ref.d, 12, 0);
+  const delta = (tzOffset(v.tzDest, refTs) - tzOffset(v.tzOrigin, refTs)) / 60000;
+  const shift = normalizeShift((targets[0] - pattern[0]) - delta);
+  if (shift === 0) return null;
+  return iStart + Math.ceil(Math.abs(shift) / v.lag);
+}
+
+function isoDay(i) {
+  const d = fromDayIndex(i), p = n => String(n).padStart(2, "0");
+  return d.y + "-" + p(d.m) + "-" + p(d.d);
+}
+function frDay(i) {
+  const d = fromDayIndex(i), p = n => String(n).padStart(2, "0");
+  return p(d.d) + "/" + p(d.m) + "/" + d.y;
+}
+
+/* ---------- lecture / écriture du formulaire ---------- */
+
+const FIELDS = ["pattern","targets","subject","description","tzOrigin","tzDest","dateStart","dateEnd","lag","prealarm"];
+const el = id => document.getElementById(id);
+
+function readForm() {
+  return {
+    pattern: el("pattern").value,
+    targets: el("targets").value,
+    subject: el("subject").value.trim() || "Prise du traitement",
+    description: el("description").value,
+    tzOrigin: el("tzOrigin").value.trim(),
+    tzDest: el("tzDest").value.trim(),
+    dateStart: el("dateStart").value,
+    dateEnd: el("dateEnd").value,
+    lag: Math.round(+el("lag").value),
+    prealarm: Math.max(0, Math.round(+el("prealarm").value || 0))
+  };
+}
+
+/* ---------- affichage ---------- */
+
+const fmtCache = {};
+function fmt(tz, ts, opts) {
+  const key = tz + JSON.stringify(opts);
+  if (!fmtCache[key]) fmtCache[key] = new Intl.DateTimeFormat("fr-FR", Object.assign({ timeZone: tz }, opts));
+  return fmtCache[key].format(new Date(ts));
+}
+
+function render(r) {
+  const box = el("readout");
+
+  if (!r.ok) {
+    box.innerHTML = '<h2>Échéancier</h2><div class="note bad">' +
+      r.errors.map(e => "<div>" + escapeHtml(e) + "</div>").join("") + "</div>";
+    return;
+  }
+
+  const v = r.v;
+  const dirWord = r.dir === 0 ? "aucun" : (r.dir > 0 ? "prises retardées" : "prises avancées");
+  const convDay = r.daysNeeded > 0 ? r.iStart + r.daysNeeded : null;
+
+  let html = "<h2>Échéancier</h2>";
+
+  html += '<dl class="facts">';
+  html += fact("Décalage horaire à l'arrivée",
+    (r.delta === 0 ? "aucun" : (r.delta > 0 ? "+" : "−") + durationLabel(r.delta)),
+    r.delta === 0 ? "" : (r.delta > 0 ? "la destination est en avance" : "la destination est en retard"));
+  html += fact("À rattraper",
+    r.shift === 0 ? "rien" : durationLabel(r.shift),
+    r.shift === 0 ? "les heures conviennent déjà" : dirWord);
+  html += fact("Durée du rattrapage",
+    r.daysNeeded === 0 ? "—" : r.daysNeeded + (r.daysNeeded > 1 ? " jours" : " jour"),
+    r.daysNeeded === 0 ? "" : "à " + v.lag + " min par jour");
+  html += fact("Horaire atteint le",
+    convDay === null ? "—" : frDay(convDay),
+    convDay === null ? "" : (r.converges
+      ? (r.daysAvailable > r.daysNeeded ? "puis stable jusqu'à la fin" : "dernier jour de l'échéancier")
+      : "après la fin de l'échéancier"));
+  html += "</dl>";
+
+  if (r.shift === 0) {
+    html += '<div class="note ok">Les heures habituelles tombent déjà aux heures visées sur place. L\'échéancier reprend ce rythme, sans aucun décalage.</div>';
+  } else if (!r.converges) {
+    const manque = r.daysNeeded - r.daysAvailable;
+    html += '<div class="note bad">L\'horaire visé ne sera pas atteint avant la fin de l\'échéancier : il manque ' +
+      manque + (manque > 1 ? " jours" : " jour") +
+      '. Le fichier reste utilisable — il décalera les prises jusqu\'au dernier jour, sans arriver au but. Pour y parvenir, il faudrait un décalage quotidien d\'au moins ' +
+      Math.ceil(Math.abs(r.shift) / Math.max(1, r.daysAvailable)) + ' minutes, ou un séjour plus long.</div>';
+  }
+
+  if (r.truncated) {
+    html += '<div class="note">L\'échéancier a été arrêté à ' + MAX_EVENTS + ' prises. Raccourcissez la période pour le voir en entier.</div>';
+  }
+
+  html += '<table><caption>Chaque ligne est une prise. L\'heure indiquée est l\'heure locale à destination ; l\'heure de départ est donnée à titre de repère.</caption>';
+  html += '<thead><tr><th>Jour</th><th>Date sur place</th><th>Heure sur place</th><th>Heure à ' +
+    escapeHtml(v.tzOrigin.split("/").pop().replace(/_/g, " ")) + '</th></tr></thead><tbody>';
+
+  const shown = r.rows.slice(0, 400);
+  for (const row of shown) {
+    html += '<tr class="' + (row.arrived ? "arrived" : "gliding") + '">' +
+      '<td class="daymark">' + (row.k === 0 ? "J+" + row.day : "") + "</td>" +
+      "<td>" + fmt(v.tzDest, row.ts, { weekday: "short", day: "2-digit", month: "2-digit" }) + "</td>" +
+      '<td class="hour">' + fmt(v.tzDest, row.ts, { hour: "2-digit", minute: "2-digit" }) + "</td>" +
+      "<td>" + fmt(v.tzOrigin, row.ts, { hour: "2-digit", minute: "2-digit" }) + "</td>" +
+      "</tr>";
+  }
+  html += "</tbody></table>";
+  if (r.rows.length > shown.length) {
+    html += '<div class="more">' + (r.rows.length - shown.length) +
+      ' prises supplémentaires ne sont pas affichées ici, mais elles figureront dans le fichier.</div>';
+  }
+
+  box.innerHTML = html;
+}
+
+function fact(term, value, sub) {
+  return '<div class="fact"><dt>' + escapeHtml(term) + "</dt><dd>" + escapeHtml(value) +
+    (sub ? " <small>" + escapeHtml(sub) + "</small>" : "") + "</dd></div>";
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* ---------- génération du .ics ---------- */
+
+function icsEscape(s) {
+  return String(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+}
+
+function utf8Width(ch) {
+  const c = ch.codePointAt(0);
+  if (c < 0x80) return 1;
+  if (c < 0x800) return 2;
+  if (c < 0x10000) return 3;
+  return 4;
+}
+
+function fold(line) {
+  if (line.length < 70) return line;
+  let out = "", len = 0;
+  for (const ch of line) {
+    const w = utf8Width(ch);
+    if (len + w > 73) { out += "\r\n "; len = 1; }
+    out += ch; len += w;
+  }
+  return out;
+}
+
+function icsStamp(ts) {
+  const d = new Date(ts);
+  const p = n => String(n).padStart(2, "0");
+  return d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate()) + "T" +
+         p(d.getUTCHours()) + p(d.getUTCMinutes()) + p(d.getUTCSeconds()) + "Z";
+}
+
+function buildIcs(r) {
+  const v = r.v;
+  const now = icsStamp(Date.now());
+  const rand = Math.random().toString(36).slice(2, 8);
+  const L = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//NoMAD DRUgS//Echeancier//FR",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "X-WR-CALNAME:" + icsEscape(v.subject)
+  ];
+
+  r.rows.forEach((row, i) => {
+    const baseDesc = [
+      v.description,
+      "Prise " + (row.k + 1) + " sur " + r.targets.length + " — jour " + row.day,
+      row.arrived ? "Horaire cible atteint." : "Adaptation en cours."
+    ].filter(Boolean).join("\n");
+
+    L.push("BEGIN:VEVENT");
+    L.push("UID:" + rand + "-" + i + "@nomaddrugs");
+    L.push("DTSTAMP:" + now);
+    L.push("DTSTART:" + icsStamp(row.ts));
+    L.push("DTEND:" + icsStamp(row.ts + 5 * 60000));
+    L.push("SUMMARY:" + icsEscape(v.subject));
+    L.push("DESCRIPTION:" + icsEscape(baseDesc));
+    L.push("TRANSP:TRANSPARENT");
+    L.push("BEGIN:VALARM");
+    L.push("ACTION:DISPLAY");
+    L.push("TRIGGER:-PT0M");
+    L.push("DESCRIPTION:" + icsEscape(v.subject));
+    L.push("END:VALARM");
+    if (v.prealarm > 0) {
+      L.push("BEGIN:VALARM");
+      L.push("ACTION:DISPLAY");
+      L.push("TRIGGER:-PT" + v.prealarm + "M");
+      L.push("DESCRIPTION:" + icsEscape(v.subject + " dans " + v.prealarm + " min"));
+      L.push("END:VALARM");
+    }
+    L.push("END:VEVENT");
+  });
+
+  L.push("END:VCALENDAR");
+  return L.map(fold).join("\r\n") + "\r\n";
+}
+
+/* ---------- URL ---------- */
+
+function toHash() {
+  const v = readForm();
+  const p = new URLSearchParams();
+  p.set("p", v.pattern); p.set("t", v.targets);
+  p.set("o", v.tzOrigin); p.set("d", v.tzDest);
+  p.set("s", v.dateStart); p.set("e", v.dateEnd);
+  p.set("l", v.lag); p.set("a", v.prealarm);
+  p.set("n", v.subject); p.set("m", v.description);
+  return "#" + p.toString();
+}
+
+function fromHash() {
+  const h = location.hash.replace(/^#/, "");
+  if (!h) return false;
+  const p = new URLSearchParams(h);
+  const set = (id, key) => { if (p.has(key)) el(id).value = p.get(key); };
+  set("pattern", "p"); set("targets", "t");
+  set("tzOrigin", "o"); set("tzDest", "d");
+  set("dateStart", "s"); set("dateEnd", "e");
+  set("lag", "l"); set("prealarm", "a");
+  set("subject", "n"); set("description", "m");
+  if (p.has("t") && p.get("t") !== p.get("p")) targetsTouched = true;
+  return true;
+}
+
+/* ---------- listes d'heures ---------- */
+
+let targetsTouched = false;
+
+function fillTimeSelects(prefix, h, m) {
+  const hs = el(prefix + "H"), ms = el(prefix + "M");
+  for (let i = 0; i < 24; i++) {
+    const o = document.createElement("option");
+    o.value = i; o.textContent = String(i).padStart(2, "0");
+    hs.appendChild(o);
+  }
+  for (let i = 0; i < 60; i++) {
+    const o = document.createElement("option");
+    o.value = i; o.textContent = String(i).padStart(2, "0");
+    ms.appendChild(o);
+  }
+  hs.value = h; ms.value = m;
+}
+
+function timesOf(id) {
+  return parseTimes(el(id).value) || [];
+}
+
+function setTimes(id, arr) {
+  const uniq = Array.from(new Set(arr)).sort((a, b) => a - b);
+  el(id).value = uniq.map(hhmm).join(";");
+  renderChips(id);
+}
+
+function renderChips(id) {
+  const t = timesOf(id);
+  el(id + "List").innerHTML = t.length
+    ? t.map(m => '<li><span>' + hhmm(m) + '</span><button type="button" data-list="' + id +
+        '" data-min="' + m + '" title="Supprimer ' + hhmm(m) + '" aria-label="Supprimer ' +
+        hhmm(m) + '">&times;</button></li>').join("")
+    : '<li class="empty">Aucune heure pour l\'instant</li>';
+}
+
+function addTime(id) {
+  const m = (+el(id + "H").value) * 60 + (+el(id + "M").value);
+  const cur = timesOf(id);
+  if (cur.indexOf(m) !== -1) { say(hhmm(m) + " est déjà dans la liste."); return; }
+  setTimes(id, cur.concat(m));
+  if (id === "targets") targetsTouched = true;
+  else if (!targetsTouched) setTimes("targets", timesOf("pattern"));
+  updateTargetsHint();
+  markStale();
+}
+
+function removeTime(id, m) {
+  setTimes(id, timesOf(id).filter(x => x !== m));
+  if (id === "targets") targetsTouched = true;
+  else if (!targetsTouched) setTimes("targets", timesOf("pattern"));
+  updateTargetsHint();
+  markStale();
+}
+
+function updateTargetsHint() {
+  el("targetsHint").textContent = targetsTouched
+    ? "Heures fixées manuellement. Toutes les prises doivent être décalées du même montant par rapport aux heures habituelles."
+    : "Recopiées sur les heures habituelles. Modifiez-les si le rythme de vie change sur place — toutes les prises doivent alors être décalées du même montant.";
+}
+
+document.addEventListener("click", ev => {
+  const b = ev.target.closest ? ev.target.closest(".chips button") : null;
+  if (!b) return;
+  removeTime(b.dataset.list, +b.dataset.min);
+});
+
+/* ---------- démarrage ---------- */
+
+function defaults() {
+  let here = "Europe/Paris";
+  try {
+    const t = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (ZONESET.has(t)) here = t;
+  } catch (e) {}
+  el("tzOrigin").value = here;
+  el("tzDest").value = ZONESET.has("Asia/Shanghai") ? "Asia/Shanghai" : ZONES[0];
+  const t = new Date();
+  const p = n => String(n).padStart(2, "0");
+  el("dateStart").value = t.getFullYear() + "-" + p(t.getMonth() + 1) + "-" + p(t.getDate());
+  el("dateEnd").value = "";
+}
+
+function updateTzInfo() {
+  const now = Date.now();
+  el("tzOriginInfo").textContent = offsetLabel(el("tzOrigin").value.trim(), now);
+  el("tzDestInfo").textContent = offsetLabel(el("tzDest").value.trim(), now);
+}
+
+function updateEndHint() {
+  el("endHint").textContent = el("dateEnd").value
+    ? "Date fixée. Videz le champ pour revenir au jour où l'horaire est atteint."
+    : "Laissez vide pour aller jusqu'au jour où l'horaire visé est atteint, et pas plus loin.";
+}
+
+let saidTimer;
+function say(msg) {
+  el("said").textContent = msg;
+  el("saidOut").textContent = msg;
+  clearTimeout(saidTimer);
+  saidTimer = setTimeout(() => {
+    el("said").textContent = "";
+    el("saidOut").textContent = "";
+  }, 4000);
+}
+
+let lastOk = false, stale = false;
+
+function showInvite() {
+  el("readout").innerHTML = "<h2>Échéancier</h2>" +
+    '<p class="invite">Renseignez le traitement et le voyage, puis lancez le calcul. ' +
+    "Tout se passe dans votre navigateur : rien n'est envoyé nulle part.</p>";
+}
+
+function runCompute() {
+  if (!el("dateEnd").value) {
+    const c = convergenceDay();
+    if (c !== null) el("dateEnd").value = isoDay(c);
+  }
+  updateEndHint();
+  const r = compute();
+  render(r);
+  lastOk = r.ok;
+  stale = false;
+  el("staleBar").hidden = true;
+  el("readout").classList.remove("stale");
+  el("outputs").style.display = r.ok ? "flex" : "none";
+  el("download").disabled = !r.ok;
+  if (r.ok) { try { history.replaceState(null, "", toHash()); } catch (e) {} }
+}
+
+function markStale() {
+  updateTzInfo();
+  updateEndHint();
+  if (!lastOk || stale) return;
+  stale = true;
+  el("staleBar").hidden = false;
+  el("readout").classList.add("stale");
+  el("download").disabled = true;
+}
+
+fillTimeSelects("pattern", 8, 0);
+fillTimeSelects("targets", 8, 0);
+defaults();
+const fromLink = fromHash();
+renderChips("pattern");
+renderChips("targets");
+updateTargetsHint();
+updateTzInfo();
+updateEndHint();
+if (fromLink) runCompute(); else showInvite();
+
+for (const id of FIELDS) {
+  el(id).addEventListener("input", markStale);
+  el(id).addEventListener("change", markStale);
+}
+
+el("run").addEventListener("click", runCompute);
+
+el("resetEnd").addEventListener("click", () => {
+  el("dateEnd").value = "";
+  updateEndHint();
+  if (lastOk) runCompute();
+});
+
+el("swap").addEventListener("click", () => {
+  const a = el("tzOrigin").value;
+  el("tzOrigin").value = el("tzDest").value;
+  el("tzDest").value = a;
+  markStale();
+  say("Départ et destination inversés.");
+});
+
+el("patternAdd").addEventListener("click", () => addTime("pattern"));
+el("targetsAdd").addEventListener("click", () => addTime("targets"));
+
+el("resetTargets").addEventListener("click", () => {
+  targetsTouched = false;
+  setTimes("targets", timesOf("pattern"));
+  updateTargetsHint();
+  markStale();
+});
+
+el("download").addEventListener("click", () => {
+  const r = compute();
+  if (!r.ok) return;
+  const blob = new Blob([buildIcs(r)], { type: "text/calendar;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "nomaddrugs-" + r.v.dateStart + "-" + r.v.dateEnd + ".ics";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  say(r.rows.length + " prises enregistrées dans le fichier.");
+});
+
+el("copy").addEventListener("click", async () => {
+  const url = location.href.split("#")[0] + toHash();
+  try {
+    await navigator.clipboard.writeText(url);
+    say("Lien copié.");
+  } catch (e) {
+    prompt("Copiez ce lien :", url);
+  }
+});
+
+window.addEventListener("hashchange", () => {
+  targetsTouched = false;
+  fromHash();
+  renderChips("pattern");
+  renderChips("targets");
+  updateTargetsHint();
+  updateTzInfo();
+  runCompute();
+});
+</script>
+</body>
+</html>
