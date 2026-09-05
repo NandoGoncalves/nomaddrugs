@@ -94,7 +94,16 @@
   .switch input:focus-visible + .sw{outline:2px solid var(--focus);outline-offset:2px}
   .switch .state{font-size:.88rem;color:var(--ink-soft)}
   .switch .state b{color:var(--brand-deep)}
-  .seriesbox{display:inline-flex;flex-direction:column;gap:.3rem;align-items:flex-start}
+  .seriesbox{display:inline-flex;flex-direction:column;gap:.25rem;align-items:flex-start;justify-content:flex-start}
+  .targetlabel{font-size:.78rem;color:var(--ink-soft)}
+  .switch{margin-top:.15rem}
+  .serieshint.warn{color:var(--alert);font-weight:500}
+  #target{
+    background:var(--field);border:1px solid var(--rule);border-radius:var(--r);
+    padding:.45rem .55rem;color:var(--ink);cursor:pointer;font-size:.9rem;
+  }
+  #target:hover{border-color:var(--brand)}
+  .serieshint{max-width:19rem}
   .qrbox{display:inline-flex;flex-direction:column;gap:.35rem;align-items:center;max-width:9.5rem}
   .qrbox svg{display:block;border:1px solid var(--rule);border-radius:6px}
   .qrhint{font-size:.72rem;color:var(--ink-soft);line-height:1.3;text-align:center}
@@ -160,7 +169,9 @@
   }
   .actions{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin-top:1.2rem}
   .actions{justify-content:center}
-  .actions#runbar{margin:0 0 1.4rem;gap:.8rem 1.4rem}
+  .actions#runbar{margin:0 0 1.4rem;gap:.8rem 1.4rem;align-items:stretch}
+  #runbar #run{align-self:stretch}
+  #runbar .said{align-self:center}
   #run{font-size:1.05rem;padding:.75rem 2rem}
   .btn{
     border:1px solid var(--brand);background:var(--brand);color:#fff;
@@ -313,12 +324,19 @@
 <div class="actions" id="runbar">
   <button type="button" class="btn" id="run">Calculer l'échéancier</button>
   <span class="seriesbox">
+    <label for="target" class="targetlabel">Agenda de destination</label>
+    <select id="target">
+      <option value="google">Google Agenda</option>
+      <option value="apple">Apple Calendrier</option>
+      <option value="outlook">Outlook</option>
+      <option value="other">Autre ou inconnu</option>
+    </select>
     <label class="switch">
       <input type="checkbox" id="asSeries" checked>
       <span class="sw" aria-hidden="true"></span>
       <span class="state">Faire une série&nbsp;: <b id="asSeriesState">oui</b></span>
     </label>
-    <span class="serieshint">Une série se supprime en une fois dans l'agenda</span>
+    <span class="serieshint" id="targetHint"></span>
   </span>
   <span class="said" id="said"></span>
 </div>
@@ -556,7 +574,7 @@ function frDay(i) {
 
 /* ---------- lecture / écriture du formulaire ---------- */
 
-const FIELDS = ["pattern","targets","subject","description","tzOrigin","tzDest","dateStart","dateEnd","lag","asSeries"];
+const FIELDS = ["pattern","targets","subject","description","tzOrigin","tzDest","dateStart","dateEnd","lag","target","asSeries"];
 const el = id => document.getElementById(id);
 
 function readForm() {
@@ -570,6 +588,7 @@ function readForm() {
     dateStart: el("dateStart").value,
     dateEnd: el("dateEnd").value,
     lag: Math.round(+el("lag").value),
+    target: el("target").value,
     asSeries: el("asSeries").checked
   };
 }
@@ -731,8 +750,9 @@ function buildIcs(r) {
       L.push("BEGIN:VEVENT");
       L.push("UID:" + rand + "-s" + k + "@nomaddrugs");
       L.push("DTSTAMP:" + now);
+      L.push("SEQUENCE:0");
       L.push("DTSTART:" + icsStamp(inst[0]));
-      L.push("DURATION:PT5M");
+      L.push("DTEND:" + icsStamp(inst[0] + 5 * 60000));
       for (let i = 1; i < inst.length; i++) {
         L.push("RDATE;VALUE=DATE-TIME:" + icsStamp(inst[i]));
       }
@@ -753,8 +773,9 @@ function buildIcs(r) {
       L.push("BEGIN:VEVENT");
       L.push("UID:" + rand + "-" + i + "@nomaddrugs");
       L.push("DTSTAMP:" + now);
+      L.push("SEQUENCE:0");
       L.push("DTSTART:" + icsStamp(row.ts));
-      L.push("DURATION:PT5M");
+      L.push("DTEND:" + icsStamp(row.ts + 5 * 60000));
       L.push("SUMMARY:" + icsEscape(v.subject));
       L.push("DESCRIPTION:" + icsEscape(desc));
       L.push("TRANSP:TRANSPARENT");
@@ -775,7 +796,7 @@ function toHash() {
   p.set("p", v.pattern); p.set("t", v.targets);
   p.set("o", v.tzOrigin); p.set("d", v.tzDest);
   p.set("s", v.dateStart); p.set("e", v.dateEnd);
-  p.set("l", v.lag); p.set("f", v.asSeries ? "1" : "0");
+  p.set("l", v.lag); p.set("g", v.target); p.set("f", v.asSeries ? "1" : "0");
   p.set("n", v.subject); p.set("m", v.description);
   return "#" + p.toString();
 }
@@ -788,8 +809,10 @@ function fromHash() {
   set("pattern", "p"); set("targets", "t");
   set("tzOrigin", "o"); set("tzDest", "d");
   set("dateStart", "s"); set("dateEnd", "e");
-  set("lag", "l");
+  set("lag", "l"); set("target", "g");
+  if (!p.has("g") && p.has("f")) el("target").value = p.get("f") === "1" ? "google" : "other";
   if (p.has("f")) el("asSeries").checked = p.get("f") === "1";
+  else el("asSeries").checked = recommendsSeries();
   set("subject", "n"); set("description", "m");
   if (p.has("t") && p.get("t") !== p.get("p")) targetsTouched = true;
   return true;
@@ -1157,8 +1180,28 @@ function updateTzInfo() {
   el("tzDestInfo").textContent = offsetLabel(el("tzDest").value.trim(), now);
 }
 
+function recommendsSeries() {
+  const t = el("target").value;
+  return t === "google" || t === "apple";
+}
+
+/* Le choix de l'agenda propose le bon réglage ; l'interrupteur garde le dernier mot. */
+function applyTargetDefault() {
+  el("asSeries").checked = recommendsSeries();
+  updateSeriesState();
+}
+
 function updateSeriesState() {
-  el("asSeriesState").textContent = el("asSeries").checked ? "oui" : "non";
+  const t = el("target").value, ser = el("asSeries").checked, hint = el("targetHint");
+  el("asSeriesState").textContent = ser ? "oui" : "non";
+  hint.classList.toggle("warn", ser && t === "outlook");
+  hint.textContent = !ser
+    ? "Une entrée par prise, à supprimer une par une. Format compris par tous les agendas."
+    : t === "outlook"
+      ? "Outlook ne sait pas lire les séries : l'import échouera."
+      : t === "other"
+        ? "Une seule entrée récurrente, supprimable en une fois. À vérifier après l'import."
+        : "Une seule entrée récurrente par heure de prise, supprimable en une fois.";
 }
 
 function updateEndHint() {
@@ -1227,6 +1270,7 @@ renderChips("targets");
 updateTargetsHint();
 updateTzInfo();
 updateEndHint();
+if (!fromLink) el("asSeries").checked = recommendsSeries();
 updateSeriesState();
 if (fromLink) runCompute(); else showInvite();
 
@@ -1235,6 +1279,7 @@ for (const id of FIELDS) {
   el(id).addEventListener("change", markStale);
 }
 
+el("target").addEventListener("change", applyTargetDefault);
 el("asSeries").addEventListener("change", updateSeriesState);
 
 el("run").addEventListener("click", runCompute);
@@ -1275,7 +1320,7 @@ el("download").addEventListener("click", () => {
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   say(r.rows.length + " prises enregistrées" +
-      (r.v.asSeries ? " en " + r.targets.length + (r.targets.length > 1 ? " séries." : " série.") : " en événements séparés."));
+      (r.v.asSeries ? " en " + r.targets.length + (r.targets.length > 1 ? " séries." : " série.") : " en entrées séparées."));
 });
 
 function configUrl() {
