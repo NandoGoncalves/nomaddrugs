@@ -330,7 +330,7 @@
 <script>
 "use strict";
 
-const VERSION = "0.0.1";
+const VERSION = "0.0.2";
 
 /* ---------- fuseaux horaires ---------- */
 
@@ -700,9 +700,12 @@ function buildIcs(r) {
   r.rows.forEach((row, i) => {
     const desc = [
       v.description,
-      r.targets.length > 1
-        ? "Prise " + (row.k + 1) + " sur " + r.targets.length + " — jour " + (row.day + 1)
-        : "Jour " + (row.day + 1),
+      /* Le numéro de jour compte l'adaptation : il n'a plus d'objet une fois l'horaire atteint. */
+      row.arrived
+        ? (r.targets.length > 1 ? "Prise " + (row.k + 1) + " sur " + r.targets.length : "")
+        : (r.targets.length > 1
+            ? "Prise " + (row.k + 1) + " sur " + r.targets.length + " — jour " + (row.day + 1)
+            : "Jour " + (row.day + 1)),
       row.arrived ? "Horaire cible atteint." : "Adaptation en cours."
     ].filter(Boolean).join("\n");
 
