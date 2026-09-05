@@ -83,7 +83,7 @@
   .hint{font-size:.78rem;color:var(--ink-soft);font-family:system-ui,sans-serif;line-height:1.4}
   input,textarea,button,select{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:.95rem}
   .timepick{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
-  .qrbox{display:inline-flex;flex-direction:column;gap:.35rem;align-items:center;max-width:9.5rem}
+  .qrbox{display:inline-flex;flex-direction:column;gap:.35rem;align-items:center;max-width:12.5rem}
   .qrbox svg{display:block;border:1px solid var(--rule);border-radius:6px}
   .qrhint{font-size:.72rem;color:var(--ink-soft);line-height:1.3;text-align:center}
   .timepick select{
@@ -330,7 +330,7 @@
 <script>
 "use strict";
 
-const VERSION = "0.0.2";
+const VERSION = "0.0.3";
 
 /* ---------- fuseaux horaires ---------- */
 
@@ -1080,10 +1080,13 @@ function qrMatrix(text){
 }
 
 
-function qrSvg(text, px){
+/* La taille affichée suit celle de la matrice : chaque module garde la même
+   dimension à l'écran, quelle que soit la longueur de la configuration. */
+function qrSvg(text){
   var r = qrMatrix(text);
   if (!r) return null;
   var quiet = 4, n = r.size, tot = n + 2 * quiet, d = "";
+  var px = Math.min(196, Math.max(132, Math.round(tot * 2.16)));
   for (var y = 0; y < n; y++)
     for (var x = 0; x < n; x++)
       if (r.m[y][x]) d += "M" + (x + quiet) + " " + (y + quiet) + "h1v1h-1z";
@@ -1156,7 +1159,7 @@ function runCompute() {
   el("download").disabled = !r.ok;
   if (r.ok) {
     try { history.replaceState(null, "", toHash()); } catch (e) {}
-    var svg = qrSvg(configUrl(), 132);
+    var svg = qrSvg(configUrl());
     el("qr").innerHTML = svg || "";
     el("qr").parentNode.style.display = svg ? "inline-flex" : "none";
   }
