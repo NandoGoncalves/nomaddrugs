@@ -613,7 +613,7 @@ function render(r) {
   const shown = r.rows.slice(0, 400);
   for (const row of shown) {
     html += '<tr class="' + (row.arrived ? "arrived" : "gliding") + '">' +
-      '<td class="daymark">' + (row.k === 0 ? "J+" + row.day : "") + "</td>" +
+      '<td class="daymark">' + (row.k === 0 ? String(row.day + 1) : "") + "</td>" +
       "<td>" + fmt(v.tzDest, row.ts, { weekday: "short", day: "2-digit", month: "2-digit" }) + "</td>" +
       '<td class="hour">' + fmt(v.tzDest, row.ts, { hour: "2-digit", minute: "2-digit" }) + "</td>" +
       "<td>" + fmt(v.tzOrigin, row.ts, { hour: "2-digit", minute: "2-digit" }) + "</td>" +
@@ -685,7 +685,7 @@ function buildIcs(r) {
   const alarm = () => {
     L.push("BEGIN:VALARM");
     L.push("ACTION:DISPLAY");
-    L.push("TRIGGER:-PT0M");
+    L.push("TRIGGER;RELATED=START:PT0S");
     L.push("DESCRIPTION:" + icsEscape(v.subject));
     L.push("END:VALARM");
   };
@@ -693,7 +693,9 @@ function buildIcs(r) {
   r.rows.forEach((row, i) => {
     const desc = [
       v.description,
-      "Prise " + (row.k + 1) + " sur " + r.targets.length + " — jour " + row.day,
+      r.targets.length > 1
+        ? "Prise " + (row.k + 1) + " sur " + r.targets.length + " — jour " + (row.day + 1)
+        : "Jour " + (row.day + 1),
       row.arrived ? "Horaire cible atteint." : "Adaptation en cours."
     ].filter(Boolean).join("\n");
 
