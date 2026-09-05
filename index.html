@@ -53,6 +53,10 @@
     text-align:center;
   }
   h1 .o{font-style:italic}
+  .version{
+    text-align:center;font-size:.7rem;letter-spacing:.05em;
+    color:var(--ink-soft);margin:0 0 .9rem;
+  }
   .tagline{
     margin:0 auto 2rem;color:var(--ink-soft);max-width:32em;
     font-size:.88rem;line-height:1.55;text-align:center;
@@ -203,6 +207,7 @@
 <div class="wrap">
 
 <h1>N<span class="o">o</span>MAD DRU<span class="o">g</span>S</h1>
+<p class="version" id="version"></p>
 <p class="tagline">Décaler jour après jour, de quelques minutes seulement, l'heure de prise d'un traitement à horaire strict — jusqu'à retrouver son rythme de vie habituel dans un autre fuseau horaire.</p>
 
 <p class="care">Cet outil ne fait que du calcul horaire. Il ne connaît ni le traitement ni la pathologie concernés. Faites valider l'échéancier par un professionnel de santé avant de le suivre, en particulier le décalage quotidien retenu.</p>
@@ -324,6 +329,8 @@
 
 <script>
 "use strict";
+
+const VERSION = "0.0.1";
 
 /* ---------- fuseaux horaires ---------- */
 
@@ -676,7 +683,7 @@ function buildIcs(r) {
   const L = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//NoMAD DRUgS//Echeancier//FR",
+    "PRODID:-//NoMAD DRUgS//Echeancier " + VERSION + "//FR",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "X-WR-CALNAME:" + icsEscape(v.subject)
@@ -1164,6 +1171,7 @@ function markStale() {
 
 fillTimeSelects("pattern", 8, 0);
 fillTimeSelects("targets", 8, 0);
+el("version").textContent = "v" + VERSION;
 defaults();
 const fromLink = fromHash();
 renderChips("pattern");
