@@ -162,7 +162,6 @@
   .readout{border-top:3px solid var(--brand);padding-top:1.1rem}
   .readout.stale{opacity:.45}
   .stalebar{border-left:4px solid var(--brand);background:var(--stable-bg);border-radius:var(--r);padding:.75rem .95rem;margin:0 0 1rem;font-size:.9rem}
-  .invite{color:var(--ink-soft);font-size:.95rem;max-width:38em;margin:0 auto;text-align:center}
   .facts{
     display:grid;gap:1.1rem 2rem;
     grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));
@@ -330,7 +329,7 @@
 <script>
 "use strict";
 
-const VERSION = "0.0.3";
+const VERSION = "0.0.6";
 
 /* ---------- fuseaux horaires ---------- */
 
@@ -448,6 +447,35 @@ const MAX_EVENTS = 3000;
 
 /* ---------- le calcul ---------- */
 
+/* Parcourt l'échéancier jour après jour.
+   `rem` est le reste à rattraper, en minutes signées : il part du décalage
+   initial et se réduit du lag chaque jour. Un changement d'heure légale à
+   destination allonge ou raccourcit la journée ; cet écart est réinjecté dans
+   `rem` pour être absorbé au même rythme, au lieu d'être encaissé d'un coup.
+   `onDay` reçoit chaque journée et peut renvoyer false pour arrêter.
+   Renvoie l'indice du premier jour où l'horaire est atteint, ou null. */
+function walkSchedule(tzDest, iStart, targets, shift, lag, maxDays, onDay) {
+  let rem = shift, prevFirst = null, reached = null;
+  for (let d = 0; d <= maxDays; d++) {
+    const date = fromDayIndex(iStart + d);
+    const T = targets.map(g =>
+      utcFromLocal(tzDest, date.y, date.m, date.d, Math.floor(g / 60), g % 60));
+
+    if (prevFirst !== null) {
+      const jump = (T[0] - prevFirst) / 60000 - 1440;   // 0 sauf changement d'heure
+      rem += jump;
+      rem -= Math.sign(rem) * Math.min(lag, Math.abs(rem));
+      if (Math.abs(rem) < 1e-6) rem = 0;
+    }
+    prevFirst = T[0];
+
+    const arrived = rem === 0;
+    if (arrived && reached === null) reached = d;
+    if (onDay(d, T, rem, arrived) === false) return reached;
+  }
+  return reached;
+}
+
 function compute() {
   const v = readForm();
   const errors = [];
@@ -486,28 +514,27 @@ function compute() {
   shift = normalizeShift((targets[0] - pattern[0]) - delta);
 
   const dir = shift === 0 ? 0 : (shift > 0 ? 1 : -1);
-  const daysNeeded = shift === 0 ? 0 : Math.ceil(Math.abs(shift) / v.lag);
   const daysAvailable = iEnd - iStart;
 
   const rows = [];
   let truncated = false;
-  for (let d = 0; d <= daysAvailable; d++) {
-    const disp = dir * Math.min(Math.abs(shift), d * v.lag);
-    const arrived = Math.abs(disp) >= Math.abs(shift);
-    const date = fromDayIndex(iStart + d);
-    for (let k = 0; k < targets.length; k++) {
-      if (rows.length >= MAX_EVENTS) { truncated = true; break; }
-      const conv = utcFromLocal(v.tzDest, date.y, date.m, date.d, Math.floor(targets[k] / 60), targets[k] % 60);
-      const ts = conv + (disp - shift) * 60000;
-      rows.push({ ts, day: d, k, arrived });
-    }
-    if (truncated) break;
-  }
+  const reached = walkSchedule(v.tzDest, iStart, targets, shift, v.lag, daysAvailable,
+    (d, T, rem, arrived) => {
+      for (let k = 0; k < targets.length; k++) {
+        if (rows.length >= MAX_EVENTS) { truncated = true; return false; }
+        rows.push({ ts: T[k] - rem * 60000, day: d, k, arrived });
+      }
+    });
+
+  /* La durée du rattrapage se déduit du parcours : elle tient compte des
+     changements d'heure, donc elle peut dépasser décalage ÷ lag. */
+  const full = reached !== null ? reached : convergenceOffset(v, iStart, targets, shift);
+  const daysNeeded = full === null ? null : full;
 
   return {
     ok: true, v, pattern, targets, delta, shift, dir, iStart,
     daysNeeded, daysAvailable, rows, truncated,
-    converges: daysNeeded <= daysAvailable
+    converges: daysNeeded !== null && daysNeeded <= daysAvailable
   };
 }
 
@@ -525,7 +552,17 @@ function convergenceDay() {
   const delta = (tzOffset(v.tzDest, refTs) - tzOffset(v.tzOrigin, refTs)) / 60000;
   const shift = normalizeShift((targets[0] - pattern[0]) - delta);
   if (shift === 0) return null;
-  return iStart + Math.ceil(Math.abs(shift) / v.lag);
+  const off = convergenceOffset(v, iStart, targets, shift);
+  return off === null ? null : iStart + off;
+}
+
+/* Nombre de jours jusqu'au premier jour où l'horaire est atteint, ou null. */
+const MAX_WALK = 500;
+function convergenceOffset(v, iStart, targets, shift) {
+  let found = null;
+  walkSchedule(v.tzDest, iStart, targets, shift, v.lag, MAX_WALK,
+    (d, T, rem, arrived) => { if (arrived) { found = d; return false; } });
+  return found;
 }
 
 function isoDay(i) {
@@ -576,7 +613,7 @@ function render(r) {
 
   const v = r.v;
   const dirWord = r.dir === 0 ? "aucun" : (r.dir > 0 ? "prises retardées" : "prises avancées");
-  const convDay = r.daysNeeded > 0 ? r.iStart + r.daysNeeded : null;
+  const convDay = (r.daysNeeded !== null && r.daysNeeded > 0) ? r.iStart + r.daysNeeded : null;
 
   let html = "<h2>Échéancier</h2>";
 
@@ -588,8 +625,9 @@ function render(r) {
     r.shift === 0 ? "rien" : durationLabel(r.shift),
     r.shift === 0 ? "les heures conviennent déjà" : dirWord);
   html += fact("Durée du rattrapage",
-    r.daysNeeded === 0 ? "—" : r.daysNeeded + (r.daysNeeded > 1 ? " jours" : " jour"),
-    r.daysNeeded === 0 ? "" : "à " + v.lag + " min par jour");
+    r.daysNeeded === null ? "très longue" : r.daysNeeded === 0 ? "—"
+      : r.daysNeeded + (r.daysNeeded > 1 ? " jours" : " jour"),
+    r.daysNeeded ? "à " + v.lag + " min par jour" : "");
   html += fact("Horaire atteint le",
     convDay === null ? "—" : frDay(convDay),
     convDay === null ? "" : (r.converges
@@ -600,11 +638,19 @@ function render(r) {
   if (r.shift === 0) {
     html += '<div class="note ok">Les heures habituelles tombent déjà aux heures visées sur place. L\'échéancier reprend ce rythme, sans aucun décalage.</div>';
   } else if (!r.converges) {
-    const manque = r.daysNeeded - r.daysAvailable;
-    html += '<div class="note bad">L\'horaire visé ne sera pas atteint avant la fin de l\'échéancier : il manque ' +
-      manque + (manque > 1 ? " jours" : " jour") +
-      '. Le fichier reste utilisable — il décalera les prises jusqu\'au dernier jour, sans arriver au but. Pour y parvenir, il faudrait un décalage quotidien d\'au moins ' +
-      Math.ceil(Math.abs(r.shift) / Math.max(1, r.daysAvailable)) + ' minutes, ou un séjour plus long.</div>';
+    html += '<div class="note bad">L\'horaire visé ne sera pas atteint avant la fin de l\'échéancier' +
+      (r.daysNeeded === null ? "" : " : il manque " + (r.daysNeeded - r.daysAvailable) +
+        ((r.daysNeeded - r.daysAvailable) > 1 ? " jours" : " jour")) +
+      '. Le fichier reste utilisable — il décalera les prises jusqu\'au dernier jour, sans arriver au but. Pour y parvenir, il faudrait un décalage quotidien plus grand, ou un séjour plus long.</div>';
+  }
+
+  /* Si l'horaire est atteint puis reperdu, c'est qu'un changement d'heure
+     légale est survenu et qu'il est en cours d'absorption. */
+  const first = r.rows.findIndex(x => x.arrived);
+  const reAdapt = first >= 0 && r.rows.slice(first).some(x => !x.arrived);
+  if (reAdapt) {
+    html += '<div class="note">Un changement d\'heure légale tombe pendant l\'échéancier à destination. L\'heure des prises est décalée progressivement, au même rythme que le reste, pour qu\'aucun écart ne dépasse ' +
+      v.lag + ' minutes d\'un jour à l\'autre.</div>';
   }
 
   if (r.truncated) {
@@ -1098,6 +1144,17 @@ function qrSvg(text){
 
 /* ---------- démarrage ---------- */
 
+/* Premier jour, à partir de `from`, où le fuseau change d'heure légale. */
+function nextClockChange(tz, from, maxDays) {
+  let prev = tzOffset(tz, from * 86400000 + 43200000);
+  for (let d = 1; d <= maxDays; d++) {
+    const off = tzOffset(tz, (from + d) * 86400000 + 43200000);
+    if (off !== prev) return from + d;
+    prev = off;
+  }
+  return null;
+}
+
 function defaults() {
   let here = "Europe/Paris";
   try {
@@ -1105,11 +1162,20 @@ function defaults() {
     if (ZONESET.has(t)) here = t;
   } catch (e) {}
   el("tzOrigin").value = here;
-  el("tzDest").value = ZONESET.has("Asia/Shanghai") ? "Asia/Shanghai" : ZONES[0];
-  const t = new Date();
-  const p = n => String(n).padStart(2, "0");
-  el("dateStart").value = t.getFullYear() + "-" + p(t.getMonth() + 1) + "-" + p(t.getDate());
+
+  /* Exemple par défaut : une destination dont le changement d'heure légale
+     tombe pendant l'adaptation, pour que ce cas soit visible d'emblée. */
+  const dest = ZONESET.has("America/New_York") ? "America/New_York" : ZONES[0];
+  el("tzDest").value = dest;
+
+  const now = new Date();
+  const today = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86400000);
+  const change = nextClockChange(dest, today + 5, 400);
+  el("dateStart").value = isoDay(change === null ? today : change - 4);
   el("dateEnd").value = "";
+
+  el("pattern").value = "12:00";
+  el("targets").value = "12:00";
 }
 
 function updateTzInfo() {
@@ -1136,12 +1202,6 @@ function say(msg) {
 }
 
 let lastOk = false, stale = false;
-
-function showInvite() {
-  el("readout").innerHTML = "<h2>Échéancier</h2>" +
-    '<p class="invite">Renseignez le traitement et le voyage, puis lancez le calcul. ' +
-    "Tout se passe dans votre navigateur : rien n'est envoyé nulle part.</p>";
-}
 
 function runCompute() {
   if (!el("dateEnd").value) {
@@ -1175,17 +1235,17 @@ function markStale() {
   el("download").disabled = true;
 }
 
-fillTimeSelects("pattern", 8, 0);
-fillTimeSelects("targets", 8, 0);
+fillTimeSelects("pattern", 12, 0);
+fillTimeSelects("targets", 12, 0);
 el("version").textContent = "v" + VERSION;
 defaults();
-const fromLink = fromHash();
+fromHash();
 renderChips("pattern");
 renderChips("targets");
 updateTargetsHint();
 updateTzInfo();
 updateEndHint();
-if (fromLink) runCompute(); else showInvite();
+runCompute();   /* l'exemple par défaut s'affiche calculé */
 
 for (const id of FIELDS) {
   el(id).addEventListener("input", markStale);
