@@ -329,7 +329,7 @@
 <script>
 "use strict";
 
-const VERSION = "0.0.6";
+const VERSION = "0.0.9";
 
 /* ---------- fuseaux horaires ---------- */
 
@@ -461,8 +461,9 @@ function walkSchedule(tzDest, iStart, targets, shift, lag, maxDays, onDay) {
     const T = targets.map(g =>
       utcFromLocal(tzDest, date.y, date.m, date.d, Math.floor(g / 60), g % 60));
 
+    let jump = 0;
     if (prevFirst !== null) {
-      const jump = (T[0] - prevFirst) / 60000 - 1440;   // 0 sauf changement d'heure
+      jump = (T[0] - prevFirst) / 60000 - 1440;   // 0 sauf changement d'heure légale
       rem += jump;
       rem -= Math.sign(rem) * Math.min(lag, Math.abs(rem));
       if (Math.abs(rem) < 1e-6) rem = 0;
@@ -471,7 +472,7 @@ function walkSchedule(tzDest, iStart, targets, shift, lag, maxDays, onDay) {
 
     const arrived = rem === 0;
     if (arrived && reached === null) reached = d;
-    if (onDay(d, T, rem, arrived) === false) return reached;
+    if (onDay(d, T, rem, arrived, jump) === false) return reached;
   }
   return reached;
 }
@@ -516,10 +517,11 @@ function compute() {
   const dir = shift === 0 ? 0 : (shift > 0 ? 1 : -1);
   const daysAvailable = iEnd - iStart;
 
-  const rows = [];
+  const rows = [], clockChanges = [];
   let truncated = false;
   const reached = walkSchedule(v.tzDest, iStart, targets, shift, v.lag, daysAvailable,
-    (d, T, rem, arrived) => {
+    (d, T, rem, arrived, jump) => {
+      if (jump !== 0) clockChanges.push({ day: d, jump });
       for (let k = 0; k < targets.length; k++) {
         if (rows.length >= MAX_EVENTS) { truncated = true; return false; }
         rows.push({ ts: T[k] - rem * 60000, day: d, k, arrived });
@@ -531,9 +533,15 @@ function compute() {
   const full = reached !== null ? reached : convergenceOffset(v, iStart, targets, shift);
   const daysNeeded = full === null ? null : full;
 
+  /* Les changements d'heure sont séparés selon qu'ils tombent pendant
+     l'adaptation ou après : ils n'appellent pas la même explication. */
+  const inAdapt = c => daysNeeded === null || c.day <= daysNeeded;
+
   return {
     ok: true, v, pattern, targets, delta, shift, dir, iStart,
     daysNeeded, daysAvailable, rows, truncated,
+    clockChanges: clockChanges.filter(inAdapt),
+    clockChangesAfter: clockChanges.filter(c => !inAdapt(c)),
     converges: daysNeeded !== null && daysNeeded <= daysAvailable
   };
 }
@@ -644,13 +652,33 @@ function render(r) {
       '. Le fichier reste utilisable — il décalera les prises jusqu\'au dernier jour, sans arriver au but. Pour y parvenir, il faudrait un décalage quotidien plus grand, ou un séjour plus long.</div>';
   }
 
-  /* Si l'horaire est atteint puis reperdu, c'est qu'un changement d'heure
-     légale est survenu et qu'il est en cours d'absorption. */
-  const first = r.rows.findIndex(x => x.arrived);
-  const reAdapt = first >= 0 && r.rows.slice(first).some(x => !x.arrived);
-  if (reAdapt) {
-    html += '<div class="note">Un changement d\'heure légale tombe pendant l\'échéancier à destination. L\'heure des prises est décalée progressivement, au même rythme que le reste, pour qu\'aucun écart ne dépasse ' +
-      v.lag + ' minutes d\'un jour à l\'autre.</div>';
+  if (r.clockChanges.length) {
+    const villeD = escapeHtml(v.tzDest.split("/").pop().replace(/_/g, " "));
+    const listed = r.clockChanges.slice(0, 2);
+    const reste = r.clockChanges.length - listed.length;
+    html += '<div class="note">' + listed.map(c =>
+      "Le " + frDay(r.iStart + c.day) + ", les horloges " +
+      (c.jump > 0 ? "reculent" : "avancent") + " de " + durationLabel(c.jump) +
+      " à " + villeD + "."
+    ).join(" ") +
+    (reste > 0 ? " Et " + reste + (reste > 1 ? " autres changements" : " autre changement") +
+      " avant la fin de l'adaptation." : "") +
+    " L'heure affichée peut donc sembler revenir en arrière ou sauter d'un jour à l'autre, et une même heure peut apparaître deux fois. L'écart réel entre deux prises n'en est pas affecté : ce décalage supplémentaire est absorbé progressivement, comme le reste.</div>";
+  }
+
+  if (r.clockChangesAfter.length) {
+    const villeD2 = escapeHtml(v.tzDest.split("/").pop().replace(/_/g, " "));
+    const listed2 = r.clockChangesAfter.slice(0, 2);
+    const reste2 = r.clockChangesAfter.length - listed2.length;
+    const dit = (c, first) =>
+      (first ? "les horloges " : "") + (c.jump > 0 ? "reculent" : "avancent") +
+      " de " + durationLabel(c.jump) + " le " + frDay(r.iStart + c.day);
+    const jours2 = Math.ceil(Math.abs(listed2[0].jump) / v.lag);
+    html += '<div class="note">Une fois l\'horaire atteint, ' +
+      listed2.map((c, i) => dit(c, i === 0)).join(", puis ") + " à " + villeD2 +
+      (reste2 > 0 ? ", et " + reste2 + (reste2 > 1 ? " autres fois ensuite" : " autre fois ensuite") : "") +
+      ". Les prises se recalent alors sur l\'heure visée en " + jours2 +
+      (jours2 > 1 ? " jours" : " jour") + ", au même rythme que l\'adaptation.</div>";
   }
 
   if (r.truncated) {
