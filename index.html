@@ -188,8 +188,15 @@
   tr.arrived td.hour{color:var(--stable);font-weight:600}
   .daymark{font-size:.78rem;color:var(--ink-soft)}
   .more{font-size:.82rem;color:var(--ink-soft);padding-top:.7rem;text-align:center}
-  footer{margin:3rem auto 0;padding-top:1.25rem;border-top:1px solid var(--rule);font-size:.78rem;color:var(--ink-soft);text-align:center;max-width:44em}
-  .owner{margin:1rem 0 0;font-size:.66rem;letter-spacing:.02em;color:var(--ink-soft);text-align:center}
+  .about{margin-top:2.5rem}
+  .about p{
+    font-size:.82rem;color:var(--ink-soft);line-height:1.55;
+    text-align:center;max-width:44em;margin:0 auto .85rem;
+  }
+  .about p:last-child{margin-bottom:0}
+  .about b{color:var(--ink)}
+  .about a{color:var(--brand-deep);text-decoration:underline}
+  .owner{margin:1.2rem auto 0;font-size:.66rem;letter-spacing:.02em;color:var(--ink-soft);text-align:center}
   @media (max-width:600px){
     .route{
       grid-template-columns:1fr;
@@ -319,17 +326,21 @@
 
 </section>
 
-<footer>
-  Tous les calculs se font dans votre navigateur, à partir de la base de fuseaux horaires qu'il embarque. Aucune donnée n'est envoyée nulle part. Les heures des rendez-vous sont enregistrées en temps universel, elles resteront donc justes quel que soit le fuseau réglé sur l'appareil.
+<section class="card about">
+  <h2>À propos</h2>
+  <p>NoMAD DRUgS calcule l'échéancier de prise d'un traitement à horaire strict lors d'un changement de fuseau horaire, et produit un fichier d'agenda correspondant. Version <b id="aboutVersion"></b>.</p>
+  <p><b>Aucune donnée n'est enregistrée ni transmise.</b> Tous les calculs se font dans votre navigateur, à partir de la base de fuseaux horaires qu'il embarque ; le fichier d'agenda y est fabriqué. Rien de ce que vous saisissez ne parvient à un serveur, pas même le lien de configuration.</p>
+  <p>Les heures des rendez-vous sont enregistrées en temps universel : elles resteront justes quel que soit le fuseau réglé sur l'appareil.</p>
+  <p>Questions, remarques, suggestions d'amélioration : <a id="contact" href="mailto:fernando.goncalves@nomaddrugs.com">fernando.goncalves@nomaddrugs.com</a></p>
   <p class="owner">NoMAD DRUgS est une application Data Intellisenses.</p>
-</footer>
+</section>
 
 </div>
 
 <script>
 "use strict";
 
-const VERSION = "0.0.9";
+const VERSION = "0.0.10";
 
 /* ---------- fuseaux horaires ---------- */
 
@@ -1266,6 +1277,9 @@ function markStale() {
 fillTimeSelects("pattern", 12, 0);
 fillTimeSelects("targets", 12, 0);
 el("version").textContent = "v" + VERSION;
+el("aboutVersion").textContent = VERSION;
+el("contact").href = "mailto:fernando.goncalves@nomaddrugs.com" +
+  "?subject=" + encodeURIComponent("NoMAD DRUgS v" + VERSION);
 defaults();
 fromHash();
 renderChips("pattern");
