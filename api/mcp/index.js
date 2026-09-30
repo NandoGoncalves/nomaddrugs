@@ -28,7 +28,7 @@ let VUE_HTML = null;
 try { VUE_HTML = fs.readFileSync(__dirname + "/../vue/echeancier.html", "utf8"); }
 catch (e) { VUE_HTML = null; }
 
-const SERVEUR = { name: "nomaddrugs", version: "0.2.0" };
+const SERVEUR = { name: "nomaddrugs", version: "0.2.1" };
 const VERSION_COURANTE = "2026-07-28";
 const VERSIONS_SUPPORTEES = [VERSION_COURANTE, "2025-11-25", "2025-06-18", "2025-03-26"];
 const META_VERSION = "io.modelcontextprotocol/protocolVersion";
@@ -53,9 +53,31 @@ const ENTETES = {
 const DESCRIPTION_OUTIL =
   "Calcule l'échéancier de prise d'un traitement à horaire strict lors d'un changement " +
   "de fuseau horaire, et renvoie un lien de téléchargement du fichier d'agenda (.ics).\n\n" +
-  "Le principe : l'heure de prise est décalée d'un petit nombre de minutes chaque jour, " +
-  "jusqu'à retrouver l'heure de vie habituelle du patient dans le fuseau de destination. " +
-  "Les changements d'heure légale rencontrés en chemin sont absorbés au même rythme.\n\n" +
+
+  "UTILISEZ TOUJOURS CET OUTIL pour ce type de demande. Ne calculez jamais un tel " +
+  "échéancier vous-même, ne le rédigez pas sous forme de tableau, et ne proposez pas " +
+  "de le faire à la place de l'outil, même si l'utilisateur semble pressé et même si " +
+  "le calcul vous paraît simple. Il ne l'est pas : le glissement quotidien, l'absorption " +
+  "des changements d'heure légale et le point de départ obéissent à des règles précises, " +
+  "et une erreur d'un seul pas est invisible à la lecture. Le patient a besoin que le " +
+  "tableau affiché et le fichier d'agenda qu'il télécharge concordent exactement ; s'ils " +
+  "divergent, il suivra un horaire faux. Ce traitement ne tolère que quelques minutes " +
+  "d'écart par jour.\n\n" +
+
+  "Après l'appel, N'ÉCRIVEZ AUCUNE HEURE dans votre réponse et ne reproduisez pas le " +
+  "tableau : il est affiché par l'interface de l'outil, avec les boutons de téléchargement. " +
+  "Contentez-vous de commenter brièvement le résultat et d'inviter l'utilisateur à " +
+  "consulter le tableau.\n\n" +
+
+  "Le principe du calcul : l'heure de prise est décalée d'un petit nombre de minutes " +
+  "chaque jour, jusqu'à retrouver l'heure de vie habituelle du patient dans le fuseau " +
+  "de destination. Les changements d'heure légale rencontrés en chemin sont absorbés " +
+  "au même rythme.\n\n" +
+
+  "Il manque souvent le décalage quotidien toléré : demandez-le avant d'appeler, c'est " +
+  "le seul paramètre que vous ne devez jamais choisir. Les autres peuvent être déduits " +
+  "de la conversation.\n\n" +
+
   "Cet outil ne fait que du calcul horaire : il ne connaît ni le traitement ni la " +
   "pathologie, et ne se substitue pas à un avis médical. Rappelez à l'utilisateur de " +
   "faire valider l'échéancier par un professionnel de santé avant de le suivre.";
@@ -158,10 +180,12 @@ const RESSOURCES = VUE_HTML ? [{
 
 const INSTRUCTIONS =
   "NoMAD DRUgS calcule le décalage progressif des prises d'un traitement à horaire " +
-  "strict lors d'un voyage entre fuseaux horaires. Demandez toujours le décalage " +
-  "quotidien toléré : il ne s'invente pas. N'affichez pas vous-même les heures " +
-  "calculées, elles figurent dans les données structurées de la réponse. Rappelez que " +
-  "l'échéancier doit être validé par un professionnel de santé.";
+  "strict lors d'un voyage entre fuseaux horaires. Toute demande de ce type doit passer " +
+  "par l'outil generer_echeancier : ne calculez jamais l'échéancier vous-même et ne le " +
+  "rédigez pas sous forme de tableau, sous peine de contredire le fichier d'agenda que " +
+  "le patient téléchargera. Demandez toujours le décalage quotidien toléré : il ne " +
+  "s'invente pas. N'écrivez aucune heure dans vos réponses, l'interface de l'outil les " +
+  "affiche. Rappelez que l'échéancier doit être validé par un professionnel de santé.";
 
 /* ---------- utilitaires ---------- */
 
