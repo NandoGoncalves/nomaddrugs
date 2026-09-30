@@ -13,6 +13,8 @@ api/
     mcp/
         function.json
         index.js
+    vue/
+        echeancier.html      ← interface affichée dans la conversation
     moteur/
         echeancier.js    ← copie fabriquée au déploiement, jamais commitée
 ```
@@ -50,6 +52,16 @@ par :
 ```yaml
           api_location: "api"
 ```
+
+## Interface dans la conversation
+
+`api/vue/echeancier.html` est servi comme ressource `ui://` par l'extension
+MCP Apps (`io.modelcontextprotocol/ui`). Il doit rester **hors d'un dossier de
+fonction** : un fichier HTML placé dans `api/mcp/` empêche l'hôte Functions de
+démarrer et fait échouer le déploiement.
+
+Si le fichier est absent, le serveur démarre quand même : l'outil redevient un
+outil ordinaire, avec son texte et ses liens.
 
 ## Version de Node
 

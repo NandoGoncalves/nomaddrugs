@@ -16,9 +16,19 @@
 
 "use strict";
 
+const fs = require("fs");
 const E = require("../moteur/echeancier.js");
 
-const SERVEUR = { name: "nomaddrugs", version: "0.1.1" };
+/* Interface affichée dans la conversation (extension MCP Apps).
+   Si le fichier manque, le serveur continue sans interface : l'outil
+   redevient un outil ordinaire, avec son texte et ses liens. */
+const VUE_URI = "ui://nomaddrugs/echeancier";
+const VUE_TYPE = "text/html;profile=mcp-app";
+let VUE_HTML = null;
+try { VUE_HTML = fs.readFileSync(__dirname + "/../vue/echeancier.html", "utf8"); }
+catch (e) { VUE_HTML = null; }
+
+const SERVEUR = { name: "nomaddrugs", version: "0.2.0" };
 const VERSION_COURANTE = "2026-07-28";
 const VERSIONS_SUPPORTEES = [VERSION_COURANTE, "2025-11-25", "2025-06-18", "2025-03-26"];
 const META_VERSION = "io.modelcontextprotocol/protocolVersion";
@@ -126,12 +136,25 @@ const SCHEMA_OUTIL = {
   additionalProperties: false
 };
 
-const OUTILS = [{
-  name: "generer_echeancier",
-  title: "Générer un échéancier de prise de traitement",
-  description: DESCRIPTION_OUTIL,
-  inputSchema: SCHEMA_OUTIL
-}];
+const OUTILS = [(function () {
+  const o = {
+    name: "generer_echeancier",
+    title: "Générer un échéancier de prise de traitement",
+    description: DESCRIPTION_OUTIL,
+    inputSchema: SCHEMA_OUTIL
+  };
+  /* Les hôtes qui ne gèrent pas l'extension ignorent ce champ et affichent
+     simplement le texte : rien ne se perd. */
+  if (VUE_HTML) o._meta = { ui: { resourceUri: VUE_URI, visibility: ["model", "app"] } };
+  return o;
+})()];
+
+const RESSOURCES = VUE_HTML ? [{
+  uri: VUE_URI,
+  name: "echeancier",
+  description: "Tableau de l'échéancier, avec les liens de téléchargement et de modification.",
+  mimeType: VUE_TYPE
+}] : [];
 
 const INSTRUCTIONS =
   "NoMAD DRUgS calcule le décalage progressif des prises d'un traitement à horaire " +
@@ -397,7 +420,7 @@ function traiter(corps, entetes, env) {
     case "server/discover":
       return { statut: 200, corps: jsonrpc(id, habiller({
         supportedVersions: VERSIONS_SUPPORTEES,
-        capabilities: { tools: {} },
+        capabilities: VUE_HTML ? { tools: {}, resources: {} } : { tools: {} },
         instructions: INSTRUCTIONS
       }, true, true)) };
 
@@ -407,7 +430,9 @@ function traiter(corps, entetes, env) {
       const retenue = VERSIONS_SUPPORTEES.indexOf(demandee) !== -1 ? demandee : "2025-06-18";
       return { statut: 200, corps: jsonrpc(id, {
         protocolVersion: retenue,
-        capabilities: { tools: { listChanged: false } },
+        capabilities: VUE_HTML
+          ? { tools: { listChanged: false }, resources: { listChanged: false } }
+          : { tools: { listChanged: false } },
         serverInfo: SERVEUR,
         instructions: INSTRUCTIONS
       }) };
@@ -440,7 +465,23 @@ function traiter(corps, entetes, env) {
     }
 
     case "resources/list":
-      return { statut: 200, corps: jsonrpc(id, habiller({ resources: [] }, moderne, true)) };
+      return { statut: 200, corps: jsonrpc(id, habiller({ resources: RESSOURCES }, moderne, true)) };
+
+    case "resources/read": {
+      const uri = corps.params && corps.params.uri;
+      if (!VUE_HTML || uri !== VUE_URI)
+        return { statut: 200, corps: erreurRpc(id, -32602, "Ressource inconnue : " + String(uri)) };
+      return { statut: 200, corps: jsonrpc(id, habiller({
+        contents: [{
+          uri: VUE_URI,
+          mimeType: VUE_TYPE,
+          text: VUE_HTML,
+          /* Aucune origine externe déclarée : la vue est entièrement autonome,
+             la politique restrictive par défaut de l'hôte lui suffit. */
+          _meta: { ui: { prefersBorder: false } }
+        }]
+      }, moderne, true)) };
+    }
     case "prompts/list":
       return { statut: 200, corps: jsonrpc(id, habiller({ prompts: [] }, moderne, true)) };
 

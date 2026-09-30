@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Échéancier NoMAD DRUgS</title>
+<style>
+  /* Les variables de l'hôte sont utilisées si elles existent ; sinon on
+     retombe sur nos propres valeurs, pour ne jamais dépendre d'un hôte
+     qui n'en fournirait qu'une partie. */
+  :root{
+    color-scheme: light dark;
+    --fond: var(--color-background-primary, light-dark(#FFFFFF, #1A1C1B));
+    --fond2: var(--color-background-secondary, light-dark(#DEF2EB, #1F3A35));
+    --texte: var(--color-text-primary, light-dark(#12302C, #E8F3F0));
+    --texte2: var(--color-text-secondary, light-dark(#4F6F69, #9CBAB4));
+    --trait: var(--color-border-primary, light-dark(#BCE1D9, #2E4A45));
+    --police: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif);
+    --rayon: var(--border-radius-md, 10px);
+    --rayon-l: var(--border-radius-lg, 14px);
+    /* Couleurs porteuses de sens : elles ne suivent pas le thème de l'hôte,
+       puisqu'elles distinguent l'adaptation de l'horaire atteint. */
+    --glissement: light-dark(#A94D00, #F0A868);
+    --atteint: light-dark(#00786F, #4FD1C3);
+    --alerte: light-dark(#C21550, #FF8FB3);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;padding:0;background:transparent;color:var(--texte);
+    font-family:var(--police);font-size:14px;line-height:1.45;
+  }
+  .carte{
+    background:var(--fond2);border-radius:var(--rayon-l);
+    padding:1rem 1.1rem 1.1rem;max-width:44rem;
+  }
+  h1{font-size:1rem;font-weight:600;margin:0 0 .15rem}
+  .sous{font-size:.8rem;color:var(--texte2);margin:0 0 .9rem}
+
+  .chiffres{
+    display:grid;gap:.7rem 1.2rem;
+    grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr));
+    margin:0 0 .9rem;
+  }
+  .chiffre dt{font-size:.72rem;color:var(--texte2);margin:0 0 .1rem}
+  .chiffre dd{margin:0;font-size:1.05rem;font-weight:600;font-variant-numeric:tabular-nums}
+  .chiffre dd small{font-weight:400;font-size:.72rem;color:var(--texte2);display:block}
+
+  .note{
+    border-left:3px solid var(--glissement);
+    background:var(--fond);border-radius:var(--rayon);
+    padding:.6rem .75rem;margin:0 0 .9rem;font-size:.8rem;
+  }
+  .note.avert{border-left-color:var(--alerte)}
+
+  .tableau{
+    background:var(--fond);border-radius:var(--rayon);
+    max-height:19rem;overflow:auto;margin:0 0 .85rem;
+  }
+  table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+  th{
+    position:sticky;top:0;background:var(--fond);
+    text-align:left;font-size:.7rem;font-weight:600;color:var(--texte2);
+    padding:.45rem .6rem;border-bottom:1px solid var(--trait);white-space:nowrap;
+  }
+  td{padding:.28rem .6rem;font-size:.82rem;white-space:nowrap;border-bottom:1px solid var(--trait)}
+  tr:last-child td{border-bottom:0}
+  td.jour{color:var(--texte2);font-size:.75rem}
+  tr.glisse td.h{color:var(--glissement);font-weight:600}
+  tr.arrive td.h{color:var(--atteint);font-weight:600}
+
+  .boutons{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+  button{
+    font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer;
+    border-radius:var(--rayon);padding:.5rem 1rem;border:1px solid transparent;
+  }
+  .principal{background:var(--atteint);color:light-dark(#FFFFFF, #0B1F1D)}
+  .second{background:transparent;color:var(--texte);border-color:var(--trait)}
+  button:hover{filter:brightness(1.08)}
+  button:focus-visible{outline:2px solid var(--atteint);outline-offset:2px}
+
+  .pied{font-size:.72rem;color:var(--texte2);margin:.8rem 0 0}
+  .lien{
+    font-size:.72rem;word-break:break-all;background:var(--fond);
+    border:1px solid var(--trait);border-radius:var(--rayon);
+    padding:.5rem .6rem;margin:.6rem 0 0;display:none;
+  }
+  .attente{color:var(--texte2);font-size:.85rem;padding:.5rem 0}
+</style>
+</head>
+<body>
+<div id="racine"><p class="attente">Calcul de l'échéancier…</p></div>
+
+<script>
+"use strict";
+
+/* ---------- dialogue JSON-RPC avec l'hôte, par postMessage ---------- */
+
+let prochainId = 1;
+const attentes = new Map();
+const surNotification = {};
+
+function demander(methode, params) {
+  const id = prochainId++;
+  window.parent.postMessage({ jsonrpc: "2.0", id: id, method: methode, params: params || {} }, "*");
+  return new Promise((ok, non) => attentes.set(id, { ok: ok, non: non }));
+}
+function notifier(methode, params) {
+  window.parent.postMessage({ jsonrpc: "2.0", method: methode, params: params || {} }, "*");
+}
+function repondre(id, resultat) {
+  window.parent.postMessage({ jsonrpc: "2.0", id: id, result: resultat || {} }, "*");
+}
+
+window.addEventListener("message", ev => {
+  const m = ev.data;
+  if (!m || m.jsonrpc !== "2.0") return;
+
+  if (m.id !== undefined && (m.result !== undefined || m.error !== undefined)) {
+    const a = attentes.get(m.id);
+    if (!a) return;
+    attentes.delete(m.id);
+    if (m.error) a.non(new Error(m.error.message || "erreur")); else a.ok(m.result);
+    return;
+  }
+  if (typeof m.method === "string") {
+    const h = surNotification[m.method];
+    if (h) h(m.params || {}, m.id);
+    else if (m.id !== undefined) repondre(m.id, {});   // requête inconnue : on acquitte
+  }
+});
+
+/* ---------- contexte fourni par l'hôte ---------- */
+
+let capacitesHote = {};
+
+function appliquerStyles(contexte) {
+  const s = contexte && contexte.styles;
+  if (!s) return;
+  if (s.variables) {
+    for (const cle of Object.keys(s.variables)) {
+      const v = s.variables[cle];
+      if (v) document.documentElement.style.setProperty(cle, v);
+    }
+  }
+  if (s.css && s.css.fonts) {
+    const st = document.createElement("style");
+    st.textContent = s.css.fonts;
+    document.head.appendChild(st);
+  }
+}
+
+function appliquerTheme(contexte) {
+  if (contexte && contexte.theme) document.documentElement.style.colorScheme = contexte.theme;
+}
+
+/* ---------- rendu ---------- */
+
+const el = id => document.getElementById(id);
+const ech = s => String(s === undefined || s === null ? "" : s)
+  .replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function frDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+  return m ? m[3] + "/" + m[2] + "/" + m[1] : (iso || "");
+}
+function duree(min) {
+  const a = Math.abs(Math.round(min)), h = Math.floor(a / 60), r = a % 60;
+  if (h && r) return h + " h " + String(r).padStart(2, "0");
+  if (h) return h + " h";
+  return r + " min";
+}
+function ville(tz) { return String(tz || "").split("/").pop().replace(/_/g, " "); }
+
+function chiffre(terme, valeur, sous) {
+  return '<div class="chiffre"><dt>' + ech(terme) + "</dt><dd>" + ech(valeur) +
+    (sous ? "<small>" + ech(sous) + "</small>" : "") + "</dd></div>";
+}
+
+function afficherErreur(texte) {
+  el("racine").innerHTML = '<div class="carte"><div class="note avert">' + ech(texte) + "</div></div>";
+  signalerTaille();
+}
+
+let liens = null;
+
+function afficher(donnees) {
+  const r = donnees.resume, vd = ville(r.fuseau_destination), vo = ville(r.fuseau_depart);
+  liens = donnees.liens || null;
+
+  let h = '<div class="carte">';
+  h += "<h1>Échéancier de prise</h1>";
+  h += '<p class="sous">' + ech(vo) + " → " + ech(vd) + " · du " + ech(frDate(r.date_debut)) +
+       " au " + ech(frDate(r.date_fin)) + "</p>";
+
+  h += '<dl class="chiffres">';
+  h += chiffre("Décalage horaire",
+    r.decalage_horaire_minutes === 0 ? "aucun"
+      : (r.decalage_horaire_minutes > 0 ? "+" : "−") + duree(r.decalage_horaire_minutes),
+    r.decalage_horaire_minutes === 0 ? "" :
+      (r.decalage_horaire_minutes > 0 ? "destination en avance" : "destination en retard"));
+  h += chiffre("À rattraper",
+    r.a_rattraper_minutes === 0 ? "rien" : duree(r.a_rattraper_minutes),
+    r.a_rattraper_minutes === 0 ? "" : r.sens_du_glissement);
+  h += chiffre("Rattrapage",
+    r.duree_rattrapage_jours === null ? "très long"
+      : r.duree_rattrapage_jours === 0 ? "—"
+      : r.duree_rattrapage_jours + (r.duree_rattrapage_jours > 1 ? " jours" : " jour"),
+    r.duree_rattrapage_jours ? r.decalage_quotidien_minutes + " min par jour" : "");
+  h += chiffre("Horaire atteint",
+    r.horaire_atteint_le ? frDate(r.horaire_atteint_le) : "—",
+    r.horaire_atteint_le
+      ? (r.horaire_atteint_dans_la_periode ? "puis stable" : "après la fin de l'échéancier") : "");
+  h += "</dl>";
+
+  const pendant = (donnees.changements_heure || []).filter(c => c.pendant_adaptation);
+  const apres = (donnees.changements_heure || []).filter(c => !c.pendant_adaptation);
+  if (pendant.length)
+    h += '<div class="note">' + pendant.map(c =>
+      "Le " + ech(frDate(c.date)) + ", les horloges " + (c.sens === "recul" ? "reculent" : "avancent") +
+      " de " + ech(duree(c.minutes)) + " à " + ech(vd) + "."
+    ).join(" ") + " L'heure affichée peut sembler revenir en arrière, et une même heure apparaître " +
+      "deux fois. L'écart réel entre deux prises n'en est pas affecté.</div>";
+  if (apres.length)
+    h += '<div class="note">Une fois l\'horaire atteint, les horloges changent d\'heure le ' +
+      ech(frDate(apres[0].date)) + " à " + ech(vd) + ". Les prises se recalent alors progressivement.</div>";
+
+  if (!r.horaire_atteint_dans_la_periode && r.a_rattraper_minutes !== 0)
+    h += '<div class="note avert">L\'horaire visé n\'est pas atteint avant la fin de l\'échéancier. ' +
+      "Le fichier reste utilisable : il décale les prises jusqu'au dernier jour.</div>";
+
+  h += '<div class="tableau"><table><thead><tr><th>Jour</th><th>Date</th><th>Heure à ' +
+    ech(vd) + "</th><th>Heure à " + ech(vo) + "</th></tr></thead><tbody>";
+  for (const p of donnees.prises || []) {
+    h += '<tr class="' + (p.horaire_atteint ? "arrive" : "glisse") + '">' +
+      '<td class="jour">' + (p.prise_du_jour === 1 ? ech(p.jour) : "") + "</td>" +
+      "<td>" + ech(p.date_destination) + "</td>" +
+      '<td class="h">' + ech(p.heure_destination) + "</td>" +
+      "<td>" + ech(p.heure_depart) + "</td></tr>";
+  }
+  h += "</tbody></table></div>";
+
+  if (donnees.prises_omises > 0)
+    h += '<p class="pied" style="margin-top:-.4rem">' + ech(donnees.prises_omises) +
+      " prises supplémentaires ne sont pas affichées ici, mais figurent dans le fichier.</p>";
+
+  h += '<div class="boutons">' +
+    '<button type="button" class="principal" id="btnFichier">Télécharger le fichier</button>' +
+    '<button type="button" class="second" id="btnPage">Ouvrir et modifier sur nomaddrugs.com</button>' +
+    "</div>";
+  h += '<div class="lien" id="zoneLien"></div>';
+  h += '<p class="pied">' + ech(donnees.avertissement || "") + "</p>";
+  h += "</div>";
+
+  el("racine").innerHTML = h;
+
+  el("btnFichier").addEventListener("click", () => ouvrir(liens && liens.telechargement));
+  el("btnPage").addEventListener("click", () => ouvrir(liens && liens.formulaire));
+  signalerTaille();
+}
+
+/* L'ouverture d'un lien passe par l'hôte : la vue est cloisonnée et ne peut
+   pas naviguer elle-même. Si l'hôte ne sait pas le faire, on affiche l'adresse. */
+function ouvrir(url) {
+  if (!url) return;
+  if (!capacitesHote.openLinks) { montrerLien(url); return; }
+  demander("ui/open-link", { url: url }).catch(() => montrerLien(url));
+}
+function montrerLien(url) {
+  const z = el("zoneLien");
+  if (!z) return;
+  z.textContent = url;
+  z.style.display = "block";
+  signalerTaille();
+  const s = window.getSelection && window.getSelection();
+  if (s) { const r = document.createRange(); r.selectNodeContents(z); s.removeAllRanges(); s.addRange(r); }
+}
+
+/* ---------- hauteur ---------- */
+
+let derniere = 0;
+function signalerTaille() {
+  const h = Math.ceil(document.documentElement.scrollHeight);
+  if (h && Math.abs(h - derniere) > 2) {
+    derniere = h;
+    notifier("ui/notifications/size-changed", { width: document.documentElement.scrollWidth, height: h });
+  }
+}
+if (window.ResizeObserver) new ResizeObserver(signalerTaille).observe(document.body);
+
+/* ---------- cycle de vie ---------- */
+
+surNotification["ui/notifications/tool-result"] = params => {
+  const d = params && params.structuredContent;
+  if (!d || !d.resume) {
+    const t = params && params.content && params.content[0] && params.content[0].text;
+    afficherErreur(t || "L'échéancier n'a pas pu être calculé.");
+    return;
+  }
+  afficher(d);
+};
+surNotification["ui/notifications/tool-cancelled"] = params => {
+  afficherErreur("Calcul interrompu" + (params && params.reason ? " : " + params.reason : "."));
+};
+surNotification["ui/notifications/host-context-changed"] = params => {
+  appliquerStyles(params); appliquerTheme(params); signalerTaille();
+};
+surNotification["ui/resource-teardown"] = (params, id) => { if (id !== undefined) repondre(id, {}); };
+
+(async function demarrer() {
+  try {
+    const res = await demander("ui/initialize", {
+      protocolVersion: "2026-01-26",
+      appCapabilities: { availableDisplayModes: ["inline"] },
+      clientInfo: { name: "nomaddrugs-vue", version: "0.1.0" }
+    });
+    capacitesHote = (res && res.hostCapabilities) || {};
+    appliquerStyles(res && res.hostContext);
+    appliquerTheme(res && res.hostContext);
+    notifier("ui/notifications/initialized", {});
+    signalerTaille();
+  } catch (e) {
+    /* Sans hôte conforme, la vue reste sur son message d'attente. */
+  }
+})();
+</script>
+</body>
+</html>
