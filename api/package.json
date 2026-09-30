@@ -1,8 +1,8 @@
 {
   "name": "nomaddrugs-api",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Serveur MCP de NoMAD DRUgS — expose le moteur de calcul d'échéancier.",
   "private": true,
-  "engines": { "node": ">=18" },
+  "engines": { "node": "20" },
   "dependencies": {}
 }

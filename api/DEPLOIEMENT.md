@@ -51,6 +51,20 @@ par :
           api_location: "api"
 ```
 
+## Version de Node
+
+Les Functions managées de Static Web Apps acceptent Node 12 à 20, **pas au-delà**.
+Deux fichiers doivent s'accorder :
+
+- `api/package.json` → `"engines": { "node": "20" }` indique à Oryx quelle
+  version installer au moment de la construction ;
+- `staticwebapp.config.json`, à la racine du site → `"platform": { "apiRuntime": "node:20" }`
+  indique à la plateforme sous quel runtime héberger la Function.
+
+Sans le premier, Oryx prend la version la plus récente disponible et le
+déploiement échoue avec « Failed to deploy the Azure Functions », alors même
+que la construction a réussi.
+
 ## Adresse du serveur MCP
 
 ```
