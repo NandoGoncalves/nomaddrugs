@@ -319,7 +319,7 @@
   <button type="button" class="btn secondary" id="copy">Copier le lien de cette configuration</button>
   <span class="qrbox">
     <span id="qr"></span>
-    <span class="qrhint">Scanner pour ouvrir cette configuration sur un téléphone</span>
+    <span class="qrhint">Scanner pour télécharger le fichier sur un téléphone</span>
   </span>
   <span class="said" id="saidOut"></span>
 </div>
@@ -341,7 +341,7 @@
 <script>
 "use strict";
 
-const VERSION = "0.0.11";
+const VERSION = "0.0.12";
 
 /* Tout le calcul vit dans moteur/echeancier.js, partagé avec le serveur.
    Ces raccourcis gardent le reste de la page inchangé. */
@@ -1000,7 +1000,7 @@ function runCompute() {
   el("download").disabled = !r.ok;
   if (r.ok) {
     try { history.replaceState(null, "", toHash()); } catch (e) {}
-    var svg = qrSvg(configUrl());
+    var svg = qrSvg(icsUrl());
     el("qr").innerHTML = svg || "";
     el("qr").parentNode.style.display = svg ? "inline-flex" : "none";
   }
@@ -1079,6 +1079,12 @@ el("download").addEventListener("click", () => {
 
 function configUrl() {
   return location.href.split("#")[0] + toHash();
+}
+
+/* Le code QR transmet un résultat, pas un formulaire : il mène à la page
+   de téléchargement, qui délivre le fichier sans autre manipulation. */
+function icsUrl() {
+  return location.href.split("#")[0].replace(/[^/]*$/, "") + "ics.html" + toHash();
 }
 
 el("copy").addEventListener("click", async () => {
