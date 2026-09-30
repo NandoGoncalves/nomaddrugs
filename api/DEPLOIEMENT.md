@@ -71,10 +71,23 @@ que la construction a réussi.
 https://<votre-domaine>/api/mcp
 ```
 
-Le serveur déduit l'adresse du site des en-têtes de la requête, donc les liens
-qu'il renvoie suivent le domaine par lequel il a été appelé. Pour forcer une
-autre base, définir la variable d'application `SITE_BASE` dans la configuration
-de la Static Web App, par exemple `https://nomaddrugs.com`.
+Attention au domaine : si un domaine personnalisé est configuré, l'adresse
+`*.azurestaticapps.net` répond par une redirection 301, que la plupart des
+clients ne suivent pas sur une requête POST. Déclarez le domaine final.
+
+### Adresse utilisée dans les liens renvoyés
+
+Derrière Static Web Apps, la Function est appelée par le service interne :
+l'en-tête `Host` porte alors une adresse en `.azurewebsites.net`, inutilisable
+par un patient. Le serveur cherche donc l'adresse publique dans cet ordre :
+
+1. la variable d'application `SITE_BASE`, si elle est définie ;
+2. l'en-tête `x-ms-original-url`, qui porte l'adresse d'origine ;
+3. `x-forwarded-host` ou `host`, s'ils ne sont pas internes ;
+4. à défaut, `https://www.nomaddrugs.com/`.
+
+Le plus sûr reste de définir `SITE_BASE` dans Configuration → Paramètres
+d'application de la Static Web App, avec la valeur `https://www.nomaddrugs.com`.
 
 ## Vérification après déploiement
 

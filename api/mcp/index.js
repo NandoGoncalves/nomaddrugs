@@ -18,7 +18,7 @@
 
 const E = require("../moteur/echeancier.js");
 
-const SERVEUR = { name: "nomaddrugs", version: "0.1.0" };
+const SERVEUR = { name: "nomaddrugs", version: "0.1.1" };
 const VERSION_COURANTE = "2026-07-28";
 const VERSIONS_SUPPORTEES = [VERSION_COURANTE, "2025-11-25", "2025-06-18", "2025-03-26"];
 const META_VERSION = "io.modelcontextprotocol/protocolVersion";
@@ -206,12 +206,28 @@ function dureeTexte(min) {
   return m + " min";
 }
 
+const SITE_PAR_DEFAUT = "https://www.nomaddrugs.com/";
+const INTERNE = /\.azurewebsites\.net$/i;
+
+/* Derrière Static Web Apps, la Function est appelée par le service interne :
+   l'en-tête Host porte alors une adresse en .azurewebsites.net, inutilisable
+   par un patient. L'adresse publique se trouve dans x-ms-original-url. */
 function baseSite(entetes, env) {
   if (env && env.SITE_BASE) return String(env.SITE_BASE).replace(/\/+$/, "") + "/";
+
+  const origine = entetes["x-ms-original-url"];
+  if (origine) {
+    try {
+      const u = new URL(origine);
+      if (u.hostname && !INTERNE.test(u.hostname)) return u.origin + "/";
+    } catch (e) { /* en-tête inexploitable : on passe à la suite */ }
+  }
+
   const hote = entetes["x-forwarded-host"] || entetes["host"];
-  if (!hote) return "https://nomaddrugs.com/";
-  const proto = entetes["x-forwarded-proto"] || "https";
-  return proto + "://" + hote + "/";
+  if (hote && !INTERNE.test(hote))
+    return (entetes["x-forwarded-proto"] || "https") + "://" + hote + "/";
+
+  return SITE_PAR_DEFAUT;
 }
 
 function fragment(v) {
