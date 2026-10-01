@@ -28,7 +28,7 @@ let VUE_HTML = null;
 try { VUE_HTML = fs.readFileSync(__dirname + "/../vue/echeancier.html", "utf8"); }
 catch (e) { VUE_HTML = null; }
 
-const SERVEUR = { name: "nomaddrugs", version: "0.2.3" };
+const SERVEUR = { name: "nomaddrugs", version: "0.2.4" };
 const VERSION_COURANTE = "2026-07-28";
 const VERSIONS_SUPPORTEES = [VERSION_COURANTE, "2025-11-25", "2025-06-18", "2025-03-26"];
 const META_VERSION = "io.modelcontextprotocol/protocolVersion";
@@ -165,9 +165,13 @@ const OUTILS = [(function () {
     description: DESCRIPTION_OUTIL,
     inputSchema: SCHEMA_OUTIL
   };
-  /* Les hôtes qui ne gèrent pas l'extension ignorent ce champ et affichent
-     simplement le texte : rien ne se perd. */
-  if (VUE_HTML) o._meta = { ui: { resourceUri: VUE_URI, visibility: ["model", "app"] } };
+  /* Deux écritures du même renvoi : la forme imbriquée de la spécification et
+     la forme plate que produit le SDK officiel. Les hôtes ne lisent pas tous
+     la même, et celui qui n'en comprend aucune affiche simplement le texte. */
+  if (VUE_HTML) o._meta = {
+    ui: { resourceUri: VUE_URI, visibility: ["model", "app"] },
+    "ui/resourceUri": VUE_URI
+  };
   return o;
 })()];
 
