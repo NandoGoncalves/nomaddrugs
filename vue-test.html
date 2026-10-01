@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagnostic de la vue — NoMAD DRUgS</title>
+<style>
+  body{
+    margin:0;padding:1.5rem;background:#FFFFFF;color:#12302C;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    font-size:15px;line-height:1.5;
+  }
+  .wrap{max-width:52rem;margin:0 auto}
+  h1{font-size:1.3rem;color:#00786F;margin:0 0 .3rem}
+  p.intro{color:#4F6F69;font-size:.85rem;margin:0 0 1.2rem;max-width:40em}
+  h2{font-size:.9rem;margin:1.5rem 0 .5rem;color:#00786F}
+  .etapes{list-style:none;padding:0;margin:0;font-size:.85rem}
+  .etapes li{padding:.3rem 0;border-bottom:1px solid #DEF2EB}
+  .etapes b{display:inline-block;min-width:1.4rem}
+  .ok{color:#00786F}
+  .ko{color:#C21550;font-weight:600}
+  .attente{color:#A94D00}
+  pre{
+    background:#F4FAF8;border:1px solid #BCE1D9;border-radius:8px;
+    padding:.7rem;font-size:.72rem;overflow:auto;max-height:14rem;margin:.5rem 0 0;
+  }
+  iframe{width:100%;border:1px dashed #BCE1D9;border-radius:12px;min-height:8rem;background:#fff}
+  .cadre{margin-top:.5rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Diagnostic de la vue</h1>
+  <p class="intro">Cette page joue le rôle d'un hôte MCP : elle interroge le vrai serveur,
+  récupère la vue telle qu'elle est servie, l'affiche dans un cadre isolé et dialogue avec
+  elle exactement comme le ferait Claude. Elle permet de savoir si le défaut vient de la
+  vue ou de l'hôte.</p>
+
+  <h2>Étapes</h2>
+  <ol class="etapes" id="etapes"></ol>
+
+  <h2>Rendu de la vue</h2>
+  <div class="cadre"><iframe id="cadre" sandbox="allow-scripts"></iframe></div>
+
+  <h2>Échanges avec la vue</h2>
+  <pre id="journal">(rien pour l'instant)</pre>
+</div>
+
+<script>
+"use strict";
+
+const SERVEUR = location.origin + "/api/mcp";
+const URI = "ui://nomaddrugs/echeancier";
+const VERSION = "2026-07-28";
+
+const etapes = document.getElementById("etapes");
+const journal = document.getElementById("journal");
+const cadre = document.getElementById("cadre");
+const lignes = [];
+
+function etape(texte, etat, detail) {
+  const li = document.createElement("li");
+  li.innerHTML = '<b class="' + etat + '">' + (etat === "ok" ? "✓" : etat === "ko" ? "✗" : "…") +
+    "</b> " + texte + (detail ? ' <span style="color:#4F6F69">— ' + detail + "</span>" : "");
+  etapes.appendChild(li);
+  return li;
+}
+function noter(sens, message) {
+  lignes.push(sens + "  " + JSON.stringify(message));
+  journal.textContent = lignes.join("\n");
+}
+
+async function rpc(methode, params) {
+  const corps = { jsonrpc: "2.0", id: Date.now() % 100000, method: methode,
+    params: Object.assign({ _meta: { "io.modelcontextprotocol/protocolVersion": VERSION } }, params) };
+  const r = await fetch(SERVEUR, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "MCP-Protocol-Version": VERSION, "Mcp-Method": methode },
+    body: JSON.stringify(corps)
+  });
+  const t = await r.text();
+  if (!r.ok) throw new Error("HTTP " + r.status + " — " + t.slice(0, 200));
+  const j = JSON.parse(t);
+  if (j.error) throw new Error(j.error.message);
+  return j.result;
+}
+
+/* L'hôte répond à la vue, comme le ferait Claude. */
+window.addEventListener("message", ev => {
+  const m = ev.data;
+  if (!m || m.jsonrpc !== "2.0") return;
+  noter("vue  →", m);
+
+  if (m.method === "ui/initialize") {
+    repondre(m.id, {
+      protocolVersion: "2026-01-26",
+      hostCapabilities: { openLinks: {}, serverTools: {}, serverResources: {} },
+      hostInfo: { name: "diagnostic-nomaddrugs", version: "1.0.0" },
+      hostContext: {
+        theme: "light",
+        displayMode: "inline",
+        availableDisplayModes: ["inline"],
+        containerDimensions: { maxHeight: 700 },
+        locale: "fr-FR"
+      }
+    });
+    etape("La vue a demandé <code>ui/initialize</code>", "ok");
+  } else if (m.method === "ui/notifications/initialized") {
+    etape("La vue s'est déclarée prête", "ok");
+    envoyerResultat();
+  } else if (m.method === "ui/open-link") {
+    repondre(m.id, {});
+    etape("La vue a demandé l'ouverture d'un lien", "ok", m.params && m.params.url);
+  } else if (m.method === "ui/notifications/size-changed") {
+    cadre.style.height = (m.params.height + 16) + "px";
+  } else if (m.id !== undefined) {
+    repondre(m.id, {});
+  }
+});
+
+function repondre(id, resultat) {
+  const msg = { jsonrpc: "2.0", id: id, result: resultat };
+  noter("hôte →", msg);
+  cadre.contentWindow.postMessage(msg, "*");
+}
+function notifier(methode, params) {
+  const msg = { jsonrpc: "2.0", method: methode, params: params };
+  noter("hôte →", { method: methode });
+  cadre.contentWindow.postMessage(msg, "*");
+}
+
+let resultatOutil = null;
+function envoyerResultat() {
+  if (!resultatOutil) return;
+  notifier("ui/notifications/tool-input", { arguments: ARGS });
+  notifier("ui/notifications/tool-result", resultatOutil);
+  etape("Résultat de l'outil transmis à la vue", "ok");
+}
+
+const ARGS = {
+  fuseau_depart: "Europe/Paris",
+  fuseau_destination: "America/New_York",
+  date_debut: "2026-10-28",
+  heures_de_prise: ["12:00"],
+  decalage_quotidien_minutes: 15
+};
+
+(async function lancer() {
+  let li = etape("Interrogation du serveur…", "attente");
+  try {
+    const d = await rpc("server/discover", {});
+    li.outerHTML = "";
+    etape("Serveur joignable", "ok", "version " +
+      (d._meta && d._meta["io.modelcontextprotocol/serverInfo"]
+        ? d._meta["io.modelcontextprotocol/serverInfo"].version : "?"));
+    etape("Capacités annoncées", d.capabilities && d.capabilities.resources ? "ok" : "ko",
+      JSON.stringify(d.capabilities));
+  } catch (e) {
+    li.outerHTML = "";
+    etape("Serveur injoignable", "ko", String(e.message));
+    return;
+  }
+
+  let html = null;
+  try {
+    const r = await rpc("resources/read", { uri: URI });
+    const c = r.contents && r.contents[0];
+    if (!c || !c.text) throw new Error("contenu vide");
+    html = c.text;
+    etape("Vue récupérée", "ok", c.mimeType + ", " + html.length + " caractères");
+    etape("Type MIME conforme", c.mimeType === "text/html;profile=mcp-app" ? "ok" : "ko", c.mimeType);
+  } catch (e) {
+    etape("Lecture de la vue impossible", "ko", String(e.message));
+    return;
+  }
+
+  try {
+    resultatOutil = await rpc("tools/call", { name: "generer_echeancier", arguments: ARGS });
+    const n = resultatOutil.structuredContent && resultatOutil.structuredContent.resume
+      ? resultatOutil.structuredContent.resume.nombre_de_prises : "?";
+    etape("Outil appelé", "ok", n + " prises");
+  } catch (e) {
+    etape("Appel de l'outil impossible", "ko", String(e.message));
+    return;
+  }
+
+  /* On charge la vue exactement comme un hôte : HTML brut dans un cadre cloisonné. */
+  etape("Chargement de la vue dans un cadre isolé…", "attente");
+  cadre.srcdoc = html;
+
+  setTimeout(() => {
+    if (!lignes.some(l => l.indexOf("ui/initialize") !== -1))
+      etape("La vue n'a envoyé aucun message au bout de 5 s", "ko",
+        "le dialogue avec l'hôte ne s'établit pas");
+  }, 5000);
+})();
+</script>
+</body>
+</html>
