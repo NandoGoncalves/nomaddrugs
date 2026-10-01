@@ -28,7 +28,7 @@ let VUE_HTML = null;
 try { VUE_HTML = fs.readFileSync(__dirname + "/../vue/echeancier.html", "utf8"); }
 catch (e) { VUE_HTML = null; }
 
-const SERVEUR = { name: "nomaddrugs", version: "0.2.5" };
+const SERVEUR = { name: "nomaddrugs", version: "0.2.6" };
 const VERSION_COURANTE = "2026-07-28";
 const VERSIONS_SUPPORTEES = [VERSION_COURANTE, "2025-11-25", "2025-06-18", "2025-03-26"];
 const META_VERSION = "io.modelcontextprotocol/protocolVersion";
@@ -65,11 +65,11 @@ const DESCRIPTION_OUTIL =
   "d'écart par jour.\n\n" +
 
   "Après l'appel, N'ÉCRIVEZ AUCUNE HEURE dans votre réponse et ne reproduisez pas le " +
-  "tableau. Donnez en revanche à l'utilisateur le lien de téléchargement que renvoie " +
-  "l'outil : selon l'hôte, l'interface avec le tableau et les boutons peut ne pas " +
-  "s'afficher, et ce lien est alors son seul moyen d'obtenir son fichier. Mentionnez " +
-  "aussi le lien vers nomaddrugs.com, qui permet de consulter le tableau et d'ajuster " +
-  "les paramètres.\n\n" +
+  "tableau. Donnez systématiquement à l'utilisateur LES DEUX LIENS que renvoie l'outil : " +
+  "celui du fichier d'agenda, et celui de nomaddrugs.com qui affiche le tableau complet " +
+  "et permet d'ajuster les paramètres. N'affirmez jamais que le tableau est visible dans " +
+  "la conversation : l'interface ne s'affiche que sur certains clients, et l'utilisateur " +
+  "pourrait chercher en vain quelque chose qui n'est pas là.\n\n" +
 
   "Le principe du calcul : l'heure de prise est décalée d'un petit nombre de minutes " +
   "chaque jour, jusqu'à retrouver l'heure de vie habituelle du patient dans le fuseau " +
@@ -415,11 +415,12 @@ function executerOutil(args, entetes, env) {
 
   /* Les liens figurent aussi dans le texte : si l'hôte n'affiche pas l'interface,
      l'utilisateur doit tout de même pouvoir obtenir son fichier. */
-  lignes.push("Fichier d'agenda à télécharger : " + liens.telechargement);
-  lignes.push("Voir et modifier sur nomaddrugs.com : " + liens.formulaire);
-  lignes.push("Donnez le premier lien à l'utilisateur, il lui délivre le fichier. N'écrivez " +
-    "aucune heure : si l'interface s'affiche, elle montre déjà le tableau complet ; sinon, " +
-    "invitez-le à ouvrir le second lien pour le consulter.");
+  lignes.push("Lien 1 — télécharger le fichier d'agenda : " + liens.telechargement);
+  lignes.push("Lien 2 — voir le tableau complet et modifier : " + liens.formulaire);
+  lignes.push("DONNEZ LES DEUX LIENS à l'utilisateur, toujours : le premier lui délivre son " +
+    "fichier, le second lui montre le tableau des prises. N'affirmez pas que le tableau est " +
+    "affiché dans la conversation : selon le client utilisé, l'interface peut ne pas " +
+    "apparaître, et l'utilisateur ne verrait alors rien. N'écrivez aucune heure vous-même.");
   lignes.push("À faire valider par un professionnel de santé.");
 
   return { content: [{ type: "text", text: lignes.join("\n") }], structuredContent: structure };
