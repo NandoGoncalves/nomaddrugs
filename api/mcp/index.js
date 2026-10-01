@@ -23,13 +23,12 @@ const E = require("../moteur/echeancier.js");
    Si le fichier manque, le serveur continue sans interface : l'outil
    redevient un outil ordinaire, avec son texte et ses liens. */
 const VUE_URI = "ui://nomaddrugs/echeancier";
-const EXT_UI = "io.modelcontextprotocol/ui";
 const VUE_TYPE = "text/html;profile=mcp-app";
 let VUE_HTML = null;
 try { VUE_HTML = fs.readFileSync(__dirname + "/../vue/echeancier.html", "utf8"); }
 catch (e) { VUE_HTML = null; }
 
-const SERVEUR = { name: "nomaddrugs", version: "0.2.2" };
+const SERVEUR = { name: "nomaddrugs", version: "0.2.3" };
 const VERSION_COURANTE = "2026-07-28";
 const VERSIONS_SUPPORTEES = [VERSION_COURANTE, "2025-11-25", "2025-06-18", "2025-03-26"];
 const META_VERSION = "io.modelcontextprotocol/protocolVersion";
@@ -445,10 +444,7 @@ function traiter(corps, entetes, env) {
     case "server/discover":
       return { statut: 200, corps: jsonrpc(id, habiller({
         supportedVersions: VERSIONS_SUPPORTEES,
-        capabilities: VUE_HTML
-          ? { tools: {}, resources: {},
-              extensions: { [EXT_UI]: { mimeTypes: [VUE_TYPE] } } }
-          : { tools: {} },
+        capabilities: VUE_HTML ? { tools: {}, resources: {} } : { tools: {} },
         instructions: INSTRUCTIONS
       }, true, true)) };
 
@@ -459,8 +455,7 @@ function traiter(corps, entetes, env) {
       return { statut: 200, corps: jsonrpc(id, {
         protocolVersion: retenue,
         capabilities: VUE_HTML
-          ? { tools: { listChanged: false }, resources: { listChanged: false },
-              extensions: { [EXT_UI]: { mimeTypes: [VUE_TYPE] } } }
+          ? { tools: { listChanged: false }, resources: { listChanged: false } }
           : { tools: { listChanged: false } },
         serverInfo: SERVEUR,
         instructions: INSTRUCTIONS
