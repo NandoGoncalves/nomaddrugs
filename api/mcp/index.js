@@ -28,7 +28,7 @@ let VUE_HTML = null;
 try { VUE_HTML = fs.readFileSync(__dirname + "/../vue/echeancier.html", "utf8"); }
 catch (e) { VUE_HTML = null; }
 
-const SERVEUR = { name: "nomaddrugs", version: "0.2.6" };
+const SERVEUR = { name: "nomaddrugs", version: "0.3.0" };
 const VERSION_COURANTE = "2026-07-28";
 const VERSIONS_SUPPORTEES = [VERSION_COURANTE, "2025-11-25", "2025-06-18", "2025-03-26"];
 const META_VERSION = "io.modelcontextprotocol/protocolVersion";
@@ -36,6 +36,7 @@ const META_SERVEUR = "io.modelcontextprotocol/serverInfo";
 
 const MAX_CORPS = 64 * 1024;        // octets
 const MAX_PRISES_REPONSE = 200;     // le fichier, lui, n'est jamais tronqué
+const MAX_LIGNES_TABLEAU = 40;      // au-delà, le tableau rédigé devient illisible
 const FRAICHEUR_LISTE = 3600000;    // une heure
 
 const ENTETES = {
@@ -64,12 +65,11 @@ const DESCRIPTION_OUTIL =
   "divergent, il suivra un horaire faux. Ce traitement ne tolère que quelques minutes " +
   "d'écart par jour.\n\n" +
 
-  "Après l'appel, N'ÉCRIVEZ AUCUNE HEURE dans votre réponse et ne reproduisez pas le " +
-  "tableau. Donnez systématiquement à l'utilisateur LES DEUX LIENS que renvoie l'outil : " +
-  "celui du fichier d'agenda, et celui de nomaddrugs.com qui affiche le tableau complet " +
-  "et permet d'ajuster les paramètres. N'affirmez jamais que le tableau est visible dans " +
-  "la conversation : l'interface ne s'affiche que sur certains clients, et l'utilisateur " +
-  "pourrait chercher en vain quelque chose qui n'est pas là.\n\n" +
+  "Après l'appel, NE CALCULEZ AUCUNE HEURE. L'outil renvoie un tableau tout rédigé : " +
+  "reproduisez-le à l'identique dans votre réponse, mêmes lignes et mêmes heures, sans " +
+  "en retirer, en ajouter ni en corriger aucune. Donnez aussi LES DEUX LIENS que renvoie " +
+  "l'outil : celui du fichier d'agenda, et celui de nomaddrugs.com qui affiche le tableau " +
+  "complet et permet d'ajuster les paramètres.\n\n" +
 
   "Le principe du calcul : l'heure de prise est décalée d'un petit nombre de minutes " +
   "chaque jour, jusqu'à retrouver l'heure de vie habituelle du patient dans le fuseau " +
@@ -243,6 +243,24 @@ function fuseauxProches(saisie) {
     .slice(0, 6).map(x => x[1]);
 }
 
+/* Le tableau est rédigé ici, à partir des heures calculées : le modèle n'a
+   qu'à le reproduire. C'est la seule façon d'avoir un tableau à l'écran sans
+   qu'une heure soit un jour recalculée de travers. */
+function tableauMarkdown(prises, villeDest, villeOrig) {
+  const vues = prises.slice(0, MAX_LIGNES_TABLEAU);
+  const l = [
+    "| Jour | Date | Heure à " + villeDest + " | Heure à " + villeOrig + " |",
+    "|---:|---|---:|---:|"
+  ];
+  for (const p of vues) {
+    l.push("| " + (p.prise_du_jour === 1 ? p.jour : "") + " | " + p.date_destination +
+      " | " + p.heure_destination + (p.horaire_atteint ? " ✓" : "") + " | " + p.heure_depart + " |");
+  }
+  if (prises.length > vues.length)
+    l.push("| … | " + (prises.length - vues.length) + " prises suivantes | — | — |");
+  return l.join("\n");
+}
+
 function erreurOutil(texte, details) {
   const c = [{ type: "text", text: texte }];
   return { content: c, structuredContent: details || {}, isError: true };
@@ -351,6 +369,9 @@ function executerOutil(args, entetes, env) {
   const hLocale = (tz, ts, opts) =>
     new Intl.DateTimeFormat("fr-FR", Object.assign({ timeZone: tz }, opts)).format(new Date(ts));
 
+  const villeDest = r.v.tzDest.split("/").pop().replace(/_/g, " ");
+  const villeOrig = r.v.tzOrigin.split("/").pop().replace(/_/g, " ");
+
   const prises = r.rows.slice(0, MAX_PRISES_REPONSE).map(x => ({
     jour: x.day + 1,
     prise_du_jour: x.k + 1,
@@ -415,12 +436,20 @@ function executerOutil(args, entetes, env) {
 
   /* Les liens figurent aussi dans le texte : si l'hôte n'affiche pas l'interface,
      l'utilisateur doit tout de même pouvoir obtenir son fichier. */
+  lignes.push("");
+  lignes.push("TABLEAU À REPRODUIRE TEL QUEL DANS VOTRE RÉPONSE, sans rien y changer :");
+  lignes.push("");
+  lignes.push(tableauMarkdown(prises, villeDest, villeOrig));
+  lignes.push("");
+  lignes.push("Le ✓ marque les prises à l'horaire visé.");
+  lignes.push("");
   lignes.push("Lien 1 — télécharger le fichier d'agenda : " + liens.telechargement);
   lignes.push("Lien 2 — voir le tableau complet et modifier : " + liens.formulaire);
-  lignes.push("DONNEZ LES DEUX LIENS à l'utilisateur, toujours : le premier lui délivre son " +
-    "fichier, le second lui montre le tableau des prises. N'affirmez pas que le tableau est " +
-    "affiché dans la conversation : selon le client utilisé, l'interface peut ne pas " +
-    "apparaître, et l'utilisateur ne verrait alors rien. N'écrivez aucune heure vous-même.");
+  lignes.push("Reproduisez le tableau ci-dessus à l'identique : mêmes lignes, mêmes heures, " +
+    "dans le même ordre. NE RECALCULEZ AUCUNE HEURE et n'en modifiez aucune. Donnez ensuite " +
+    "LES DEUX LIENS, toujours : le premier délivre le fichier, le second ouvre le tableau " +
+    "complet sur le site. N'affirmez pas qu'une interface s'affiche par ailleurs : selon le " +
+    "client utilisé, elle peut ne pas apparaître.");
   lignes.push("À faire valider par un professionnel de santé.");
 
   return { content: [{ type: "text", text: lignes.join("\n") }], structuredContent: structure };
