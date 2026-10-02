@@ -28,7 +28,14 @@ let VUE_HTML = null;
 try { VUE_HTML = fs.readFileSync(__dirname + "/../vue/echeancier.html", "utf8"); }
 catch (e) { VUE_HTML = null; }
 
-const SERVEUR = { name: "nomaddrugs", version: "0.3.0" };
+/* Tant qu'un hôte déclare gérer l'extension, il considère que le tableau
+   relève de l'interface et s'abstient de le reproduire — même lorsqu'il
+   échoue à l'afficher. Les deux approches sont donc exclusives : par défaut
+   le tableau est rédigé dans le texte, et l'interface reste éteinte.
+   Mettre le paramètre d'application UI_MCP à 1 pour la rallumer. */
+if (process.env.UI_MCP !== "1") VUE_HTML = null;
+
+const SERVEUR = { name: "nomaddrugs", version: "0.3.1" };
 const VERSION_COURANTE = "2026-07-28";
 const VERSIONS_SUPPORTEES = [VERSION_COURANTE, "2025-11-25", "2025-06-18", "2025-03-26"];
 const META_VERSION = "io.modelcontextprotocol/protocolVersion";

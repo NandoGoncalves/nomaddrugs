@@ -328,7 +328,7 @@
 
 <section class="card about">
   <h2>À propos</h2>
-  <p>NoMAD DRUgS calcule l'échéancier de prise d'un traitement à horaire strict lors d'un changement de fuseau horaire, et produit un fichier d'agenda correspondant. Version <b id="aboutVersion"></b>, moteur de calcul <b id="aboutMoteur"></b>.</p>
+  <p>NoMAD DRUgS calcule l'échéancier de prise d'un traitement à horaire strict lors d'un changement de fuseau horaire, et produit un fichier d'agenda correspondant. Version <b id="aboutVersion"></b>, moteur de calcul <b id="aboutMoteur"></b><span id="aboutServeur"></span>.</p>
   <p><b>Aucune donnée n'est enregistrée ni transmise.</b> Tous les calculs se font dans votre navigateur, à partir de la base de fuseaux horaires qu'il embarque ; le fichier d'agenda y est fabriqué. Rien de ce que vous saisissez ne parvient à un serveur, pas même le lien de configuration.</p>
   <p>Les heures des rendez-vous sont enregistrées en temps universel : elles resteront justes quel que soit le fuseau réglé sur l'appareil.</p>
   <p>Questions, remarques, suggestions d'amélioration : <a id="contact" href="mailto:fernando.goncalves@nomaddrugs.com">fernando.goncalves@nomaddrugs.com</a></p>
@@ -341,7 +341,7 @@
 <script>
 "use strict";
 
-const VERSION = "0.0.12";
+const VERSION = "0.0.13";
 
 /* Tout le calcul vit dans moteur/echeancier.js, partagé avec le serveur.
    Ces raccourcis gardent le reste de la page inchangé. */
@@ -1021,6 +1021,26 @@ fillTimeSelects("targets", 12, 0);
 el("version").textContent = "v" + VERSION;
 el("aboutVersion").textContent = VERSION;
 el("aboutMoteur").textContent = E.VERSION;
+
+/* Seule requête réseau de la page, et elle ne transporte rien : elle demande
+   au serveur MCP son numéro de version. Un échec ne change rien à la page. */
+(function versionDuServeur() {
+  try {
+    fetch("api/mcp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "MCP-Protocol-Version": "2026-07-28" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "server/discover",
+        params: { _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } } })
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(j => {
+        const i = j && j.result && j.result._meta
+          && j.result._meta["io.modelcontextprotocol/serverInfo"];
+        if (i && i.version) el("aboutServeur").textContent = ", serveur d'outil " + i.version;
+      })
+      .catch(() => {});
+  } catch (e) {}
+})();
 el("contact").href = "mailto:fernando.goncalves@nomaddrugs.com" +
   "?subject=" + encodeURIComponent("NoMAD DRUgS v" + VERSION);
 defaults();
